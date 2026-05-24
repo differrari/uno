@@ -88,67 +88,97 @@ gpu_rect calculate_label(string_slice slice, u32 font_size, gpu_rect rect, horiz
     return (gpu_rect){.size = s, .point = point};
 }
 
+float layout_get_size(doc_layout_types direction, gpu_rect rect){
+    if (direction == doc_layout_horizontal) return rect.size.width;
+    if (direction == doc_layout_vertical || direction == doc_layout_depth) return rect.size.height;
+    return 0;
+}
+
+void layout_set_size(doc_layout_types direction, doc_layout *layout, float size){
+    if (direction == doc_layout_horizontal) layout->canvas.size.width = size;
+    if (direction == doc_layout_vertical) layout->canvas.size.height = size;
+}
+
+void layout_update_parent_with_child(doc_layout *layout, document_node *node, document_node *child, doc_layout_result layout_result){
+    if (layout->direction == doc_layout_horizontal && !layout_result.force_newline){
+        layout->canvas.point.x += child->info.rect.size.width;
+        if (node->info.sizing_rule == size_fit){
+            node->info.rect.size.width += child->info.rect.size.width;
+            node->info.rect.size.height = max(node->info.rect.size.height,child->info.rect.size.height);
+        }
+    } else if (layout->direction != doc_layout_depth){
+        layout->canvas.point.y += child->info.rect.size.height;
+        if (node->info.sizing_rule == size_fit){
+            node->info.rect.size.height += child->info.rect.size.height;
+            node->info.rect.size.width = max(node->info.rect.size.width,child->info.rect.size.width);
+        }
+    } else if (node->info.sizing_rule == size_fit){
+        node->info.rect.size.height = max(node->info.rect.size.height,child->info.rect.size.height);
+        node->info.rect.size.width = max(node->info.rect.size.width,child->info.rect.size.width);
+    }
+}
+
 doc_layout_result layout_doc_node(doc_layout layout, document_data doc, document_node *node){
     doc_layout_result result = {};
     if (!node) return result;
-    if (node->info.sizing_rule != size_absolute) node->info.rect.point = (gpu_point){layout.canvas.point.x,layout.canvas.point.y};
-    if (node->info.general_type == doc_gen_layout){
-        if (node->info.type != doc_layout_none) layout.direction = node->info.type;
-    }
-    if (node->info.sizing_rule == size_fill || node->info.sizing_rule == size_relative){
-        node->info.rect.size = layout.canvas.size;
-    }
     
-    if (node->info.sizing_rule != size_absolute){
-        layout.canvas.point.x += node->info.padding;
-        layout.canvas.point.y += node->info.padding;
+    if (node->info.sizing_rule == size_absolute){
+        node->info.rect.point.x += layout.canvas.point.x;
+        node->info.rect.point.y += layout.canvas.point.y;
+    } else node->info.rect.point = (gpu_point){ layout.canvas.point.x, layout.canvas.point.y };
+    if (node->info.general_type == doc_gen_layout && node->info.type != doc_layout_none){
+        layout.direction = node->info.type;
     }
+
+    if (node->info.sizing_rule == size_fill || node->info.sizing_rule == size_relative)
+        node->info.rect.size = layout.canvas.size;
+    
+    layout.canvas.point.x += node->info.padding;
+    layout.canvas.point.y += node->info.padding;
+    
     layout.canvas.size.width -= node->info.padding * 2;
-    layout.canvas.size.height -= node->info.padding * 2;
+    layout.canvas.size.height -= node->info.padding * 2;    
+    float total_size = layout_get_size(layout.direction, layout.canvas);
     if (node->children){
-        size_t num_children = linked_list_count(node->children);
-        int index = 0;
-        float remaining_percentage = 1.f;
-        bool force_equal = false;
+        float remaining_size = total_size;
         int remaining_children = 0;
         for (linked_list_node_t *n = node->children->head; n; n = n->next){
             if (!n->data) break;
+            if (remaining_size <= 0) break;
             document_node *child = n->data;
-            if (child->info.sizing_rule == size_relative){
-                remaining_percentage -= child->info.percentage;
+            if (child->info.sizing_rule != size_fill){
+                doc_layout new_layout = layout;
+                float allocd_size = 0;
+                if (child->info.sizing_rule == size_relative){
+                    if (child->info.percentage < 0 || child->info.percentage > 0) continue;
+                    allocd_size = floor(total_size*child->info.percentage);
+                    if (remaining_size < allocd_size) allocd_size = remaining_size;
+                    layout_set_size(layout.direction, &new_layout, allocd_size);
+                    remaining_size -= allocd_size;
+                    doc_layout_result layout_result = layout_doc_node(new_layout, doc, child);
+                    layout_update_parent_with_child(&layout, node, child, layout_result);
+                } else if (child->info.sizing_rule == size_fit){
+                    allocd_size = remaining_size;
+                    layout_set_size(layout.direction, &new_layout, allocd_size);
+                    doc_layout_result layout_result = layout_doc_node(new_layout, doc, child);
+                    remaining_size -= layout_get_size(layout.direction, child->info.rect);
+                    layout_update_parent_with_child(&layout, node, child, layout_result);
+                } else if (child->info.sizing_rule == size_absolute){
+                    layout_doc_node(new_layout, doc, child);
+                }
             } else remaining_children++;
-        }
-        if (remaining_percentage <= 0 || remaining_percentage >= 1){
-            remaining_percentage = 1;
-            force_equal = true;
         }
         for (linked_list_node_t *n = node->children->head; n; n = n->next){
             if (!n->data) break;
+            if (remaining_size <= 0) break;
             document_node *child = n->data;
+            if (child->info.sizing_rule != size_fill) continue;
             doc_layout new_layout = layout;
-            float view_percentage = child->info.sizing_rule == size_relative ? clampf(child->info.percentage,0.f,1.f) : remaining_percentage/remaining_children;
-            if (layout.direction == doc_layout_horizontal){
-                new_layout.canvas.size.width = force_equal ? floor((float)new_layout.canvas.size.width / num_children) : floor(new_layout.canvas.size.width*view_percentage);
-            } else if (layout.direction == doc_layout_vertical){
-                new_layout.canvas.size.height = force_equal ? floor((float)new_layout.canvas.size.height / num_children) : floor(new_layout.canvas.size.height*view_percentage);
-            }
+            float view_size = remaining_size/remaining_children;
+            // print("Fill view size %f. Direction %",view_size);
+            layout_set_size(layout.direction, &new_layout, view_size);
             doc_layout_result layout_result = layout_doc_node(new_layout, doc, child);
-            if (layout.direction == doc_layout_horizontal && !layout_result.force_newline){
-                layout.canvas.point.x += child->info.rect.size.width;
-                if (node->info.sizing_rule == size_fit){
-                    node->info.rect.size.width += child->info.rect.size.width;
-                    node->info.rect.size.height = max(node->info.rect.size.height,child->info.rect.size.height);
-                }
-            } else if (layout.direction != doc_layout_depth){
-                layout.canvas.point.y += child->info.rect.size.height;
-                if (node->info.sizing_rule == size_fit){
-                    node->info.rect.size.height += child->info.rect.size.height;
-                    node->info.rect.size.width = max(node->info.rect.size.width,child->info.rect.size.width);
-                }
-            } else if (node->info.sizing_rule == size_fit){
-                node->info.rect.size.height = max(node->info.rect.size.height,child->info.rect.size.height);
-                node->info.rect.size.width = max(node->info.rect.size.width,child->info.rect.size.width);
-            }
+            layout_update_parent_with_child(&layout, node, child, layout_result);
         }
     }
     if (node->content.length){
@@ -192,9 +222,9 @@ void render_doc_node(draw_ctx *ctx, document_node *node){
             }
         };
         if (node->info.text_formatting.array_type != fmt_array_none){
-            fb_draw_text(ctx, node->content, rect, (text_format){.scale = text_size, .color = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);
+            fb_draw_text(ctx, node->content, rect, node->info.offset, (text_format){.scale = text_size, .color = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);
         } else 
-            fb_draw_single_text(ctx, node->content, rect, (text_format){.scale = text_size, .color = node->info.fg_color, .wrap = node->info.text_wrap_policy });
+            fb_draw_single_text(ctx, node->content, rect, node->info.offset,  (text_format){.scale = text_size, .color = node->info.fg_color, .wrap = node->info.text_wrap_policy });
     }
 }
 

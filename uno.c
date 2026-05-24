@@ -82,13 +82,13 @@ void uno_end_horizontal(){
 void uno_begin_depth(node_info info){
     info.general_type = doc_gen_layout;
     info.type = doc_layout_depth;
-    document_node* horiz = uno_make_view(info);
+    document_node* depth = uno_make_view(info);
     if (!default_doc_data.root){
-        default_doc_data.root = horiz;
+        default_doc_data.root = depth;
     }
     if (current_node)
-        uno_attach(current_node, horiz);
-    uno_state_push(horiz);
+        uno_attach(current_node, depth);
+    uno_state_push(depth);
 }
 
 void uno_end_depth(){

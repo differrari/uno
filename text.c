@@ -140,9 +140,6 @@ bool uno_text_field_mouse(document_node *node, mouse_data data, u8 modifier){
     return true;
 }
 
-#define line_height(text) (fb_get_char_size(text_to_scale(text)) + 2)
-#define char_width(text) (fb_get_char_size(text_to_scale(text)))
-
 void* uno_text_field_copy(document_node* node, size_t *out_size){
     if (!node || !node->ctx || !out_size) return false;
     text_field_info *info = node->ctx;
@@ -187,8 +184,15 @@ void uno_text_field(int tag, node_info info, text_field_info *text_info){
     
     i32 lin, col = 0;
     pos_to_lin_col(text_info->content->cursor, (string_slice){text_info->content->buffer,text_info->content->buffer_size}, &lin, &col);
+
+    u32 scale = text_to_scale(info.type);
     
-    document_node *cursor = uno_create_view((node_info){.bg_color = text_info->selection.start || text_info->selection.end ? 0xFF555555 : text_info->cursor_color, .sizing_rule = size_absolute, .rect = (gpu_rect){node->info.offset.x + (col * char_width(info.type)),node->info.offset.y + (lin * line_height(info.type)),3,line_height(info.type)}}, (string_slice){});
+    u32 cw = fb_char_width(scale);
+    u32 lh = fb_line_height(scale);
+    u32 ls = fb_get_line_spacing(scale);
+    u32 ch = lh - ls;
+    
+    document_node *cursor = uno_create_view((node_info){.bg_color = text_info->selection.start || text_info->selection.end ? 0xFF555555 : text_info->cursor_color, .sizing_rule = size_absolute, .rect = (gpu_rect){(col * cw),(lin * lh), 3, ch}}, (string_slice){});
     
     uno_end_depth();
 }
@@ -198,8 +202,8 @@ void uno_text_field_scroll_node(document_node *node, i32 x_shift, i32 y_shift){
     if (!info) return;
     buffer *content = info->content;
     if (!content || !content->buffer) return;
-    u8 cw = line_height(node->info.type);
-    u8 lh = line_height(node->info.type);
+    u8 cw = fb_line_height(text_to_scale(node->info.type));
+    u8 lh = fb_line_height(text_to_scale(node->info.type));
     if (x_shift != 0){
         if (info->offset.x + x_shift > 0) info->offset.x = 0;
         else info->offset.x += x_shift * cw;
@@ -222,8 +226,8 @@ void uno_text_field_shift_cursor_node(document_node *node, i32 x_shift, i32 y_sh
     if (!info) return;
     buffer *content = info->content;
     if (!content || !content->buffer) return;
-    u8 cw = line_height(node->info.type);
-    u8 lh = line_height(node->info.type);
+    u8 cw = fb_line_height(text_to_scale(node->info.type));
+    u8 lh = fb_line_height(text_to_scale(node->info.type));
     if (x_shift){
         if ((i64)content->cursor + x_shift < 0) content->cursor = 0;
         else content->cursor += x_shift;

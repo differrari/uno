@@ -13,6 +13,8 @@ void uno_end_horizontal();
 void uno_begin_depth(node_info info);
 void uno_end_depth();
 
+void uno_attach(document_node *parent, document_node *child);
+
 void uno_create_empty_view(node_info info);
 document_node* uno_create_view(node_info info, string_slice content);
 
