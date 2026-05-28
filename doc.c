@@ -101,13 +101,13 @@ void layout_set_size(doc_layout_types direction, doc_layout *layout, float size)
 
 void layout_update_parent_with_child(doc_layout *layout, document_node *node, document_node *child, doc_layout_result layout_result){
     if (layout->direction == doc_layout_horizontal && !layout_result.force_newline){
-        layout->canvas.point.x += child->info.rect.size.width;
+        // layout->canvas.point.x += child->info.rect.size.width;
         if (node->info.sizing_rule == size_fit){
             node->info.rect.size.width += child->info.rect.size.width;
             node->info.rect.size.height = max(node->info.rect.size.height,child->info.rect.size.height);
         }
     } else if (layout->direction != doc_layout_depth){
-        layout->canvas.point.y += child->info.rect.size.height;
+        // layout->canvas.point.y += child->info.rect.size.height;
         if (node->info.sizing_rule == size_fit){
             node->info.rect.size.height += child->info.rect.size.height;
             node->info.rect.size.width = max(node->info.rect.size.width,child->info.rect.size.width);
@@ -122,19 +122,12 @@ doc_layout_result layout_doc_node(doc_layout layout, document_data doc, document
     doc_layout_result result = {};
     if (!node) return result;
     
-    if (node->info.sizing_rule == size_absolute){
-        node->info.rect.point.x += layout.canvas.point.x;
-        node->info.rect.point.y += layout.canvas.point.y;
-    } else node->info.rect.point = (gpu_point){ layout.canvas.point.x, layout.canvas.point.y };
     if (node->info.general_type == doc_gen_layout && node->info.type != doc_layout_none){
         layout.direction = node->info.type;
     }
 
     if (node->info.sizing_rule == size_fill || node->info.sizing_rule == size_relative)
         node->info.rect.size = layout.canvas.size;
-    
-    layout.canvas.point.x += node->info.padding;
-    layout.canvas.point.y += node->info.padding;
     
     layout.canvas.size.width -= node->info.padding * 2;
     layout.canvas.size.height -= node->info.padding * 2;    
@@ -195,9 +188,44 @@ doc_layout_result layout_doc_node(doc_layout layout, document_data doc, document
     return result;
 }
 
+void layout_doc_node_pos(doc_layout layout, document_node *node){
+    if (!node) return;
+    
+    if (node->info.sizing_rule == size_absolute){
+        node->info.rect.point.x += layout.canvas.point.x;
+        node->info.rect.point.y += layout.canvas.point.y;
+    } else node->info.rect.point = (gpu_point){ layout.canvas.point.x, layout.canvas.point.y };
+    if (node->info.general_type == doc_gen_layout && node->info.type != doc_layout_none){
+        layout.direction = node->info.type;
+    }
+    
+    layout.canvas.point.x += node->info.padding;
+    layout.canvas.point.y += node->info.padding;
+    
+    if (layout.direction != doc_layout_depth && node->children)
+        for (linked_list_node_t *n = node->children->head; n; n = n->next){
+            if (!n->data) continue;
+            document_node *child = n->data;
+            if (child->info.sizing_rule != size_absolute){
+                if (layout.direction == doc_layout_horizontal)
+                    child->info.rect.point.x = layout.canvas.point.x;
+                else if (layout.direction == doc_layout_vertical)
+                    child->info.rect.point.y = layout.canvas.point.y;
+            }
+            layout_doc_node_pos(layout, child);
+            if (child->info.sizing_rule != size_absolute){
+                if (layout.direction == doc_layout_horizontal)
+                    layout.canvas.point.x += child->info.rect.size.width;
+                else if (layout.direction == doc_layout_vertical)
+                    layout.canvas.point.y += child->info.rect.size.height;
+            }
+        }
+}
+
 void layout_document(gpu_rect canvas, document_data doc){
     doc_layout layout = (doc_layout){.canvas = canvas};
     layout_doc_node(layout, doc, doc.root);
+    layout_doc_node_pos(layout, doc.root);
 }
 
 void render_doc_node(draw_ctx *ctx, document_node *node){
