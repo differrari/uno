@@ -12,6 +12,15 @@ typedef struct {
     bool force_newline;
 } doc_layout_result;
 
+#define draw_text(ctx, rect) ({\
+gpu_size _s = {};\
+if (node->info.text_formatting.array_type != fmt_array_none){\
+    _s = fb_draw_text(ctx, node->content, rect, node->info.offset, (text_format){.scale = text_size, .color = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);\
+} else \
+    _s = fb_draw_single_text(ctx, node->content, rect, node->info.offset,  (text_format){.scale = text_size, .color = node->info.fg_color, .wrap = node->info.text_wrap_policy });\
+    _s;\
+});
+
 int text_to_scale(doc_text_size type){
     switch (type) {
         case doc_text_body:          return 3;
@@ -177,11 +186,11 @@ doc_layout_result layout_doc_node(doc_layout layout, document_data doc, document
     if (node->content.length){
         int text_size = text_to_scale(node->info.type);
         if (!text_size) return (doc_layout_result){};
-        gpu_rect label_rect = calculate_label(node->content, text_size, layout.canvas, node->info.horiz_alignment, node->info.vert_alignment);
-        label_rect.size.width += node->info.padding * 2;
-        label_rect.size.height += node->info.padding * 2;
-        if (node->info.sizing_rule == size_fit) node->info.rect.size = label_rect.size;
-        node->info.rect.point = label_rect.point;
+        draw_ctx ctx = {.width = layout.canvas.size.width,.height= layout.canvas.size.height};
+        gpu_size label_rect = draw_text(&ctx, layout.canvas);
+        label_rect.width += node->info.padding * 2;
+        label_rect.height += node->info.padding * 2;
+        if (node->info.sizing_rule == size_fit) node->info.rect.size = label_rect;
         result.force_newline = text_force_newline(node->info.type);
     }
     
@@ -249,10 +258,7 @@ void render_doc_node(draw_ctx *ctx, document_node *node){
                 node->info.rect.size.height - node->info.padding*2
             }
         };
-        if (node->info.text_formatting.array_type != fmt_array_none){
-            fb_draw_text(ctx, node->content, rect, node->info.offset, (text_format){.scale = text_size, .color = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);
-        } else 
-            fb_draw_single_text(ctx, node->content, rect, node->info.offset,  (text_format){.scale = text_size, .color = node->info.fg_color, .wrap = node->info.text_wrap_policy });
+        draw_text(ctx, rect);
     }
 }
 
