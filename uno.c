@@ -44,6 +44,7 @@ void uno_state_pop(){
     size_t count = chunk_array_count(node_stack);
     if (count){
         current_node = (document_node*)*(uptr*)chunk_array_get(node_stack,chunk_array_count(node_stack)-1);
+        chunk_array_remove(node_stack, 1);
     }
 }
 
@@ -130,6 +131,10 @@ void set_document_view(void (*view_builder)(), gpu_rect canvas){
     view_build_func = view_builder;
     default_canvas = canvas;
     uno_refresh();
+}
+
+document_data get_current_document_view(){
+    return default_doc_data;
 }
 
 void uno_refresh(){

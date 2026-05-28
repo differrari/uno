@@ -150,7 +150,7 @@ doc_layout_result layout_doc_node(doc_layout layout, document_data doc, document
                 doc_layout new_layout = layout;
                 float allocd_size = 0;
                 if (child->info.sizing_rule == size_relative){
-                    if (child->info.percentage < 0 || child->info.percentage > 0) continue;
+                    if (child->info.percentage < 0 || child->info.percentage > 1) continue;
                     allocd_size = floor(total_size*child->info.percentage);
                     if (remaining_size < allocd_size) allocd_size = remaining_size;
                     layout_set_size(layout.direction, &new_layout, allocd_size);
@@ -238,7 +238,7 @@ char *indent = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t
 
 void debug_node(document_node *node, int depth){
     if (!node) return;
-    print("%sNode %ix%i - %ix%i - %i",indent_by(depth),node->info.rect.point.x,node->info.rect.point.y,node->info.rect.size.width,node->info.rect.size.height,node->info.padding);
+    print("%sNode %ix%i - %ix%i - %i - %v",indent_by(depth),node->info.rect.point.x,node->info.rect.point.y,node->info.rect.size.width,node->info.rect.size.height,node->info.sizing_rule,(string_slice){.data = node->content.data, min(node->content.length, 16)});
     if (node->children)
         for (linked_list_node_t *n = node->children->head; n; n = n->next){
             if (!n->data) break;
