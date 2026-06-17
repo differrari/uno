@@ -15,9 +15,9 @@ typedef struct {
 #define draw_text(ctx, rect) ({\
 gpu_size _s = {};\
 if (node->info.text_formatting.array_type != fmt_array_none){\
-    _s = fb_draw_text(ctx, node->content, rect, node->info.offset, (text_format){.scale = text_size, .color = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);\
+    _s = fb_draw_text(ctx, node->content, rect, node->info.offset, (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);\
 } else \
-    _s = fb_draw_single_text(ctx, node->content, rect, node->info.offset,  (text_format){.scale = text_size, .color = node->info.fg_color, .wrap = node->info.text_wrap_policy });\
+    _s = fb_draw_single_text(ctx, node->content, rect, node->info.offset,  (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy });\
     _s;\
 });
 
