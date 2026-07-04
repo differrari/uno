@@ -169,7 +169,7 @@ document_node* uno_text_field(int tag, node_info info, text_field_info *text_inf
     if (!((info.fg_color >> 24) & 0xFF)) info.fg_color |= 0xFF << 24;
     
     info.offset = text_info->offset;
-    uno_begin_depth(info);
+
     node_info text_node_info = info;
     text_node_info.sizing_rule = size_fill;
     info.general_type = doc_gen_text;
@@ -181,20 +181,6 @@ document_node* uno_text_field(int tag, node_info info, text_field_info *text_inf
     node->input.tag = tag;
     
     node->ctx = text_info;
-    
-    i32 lin, col = 0;
-    pos_to_lin_col(text_info->content->cursor, (string_slice){text_info->content->buffer,text_info->content->buffer_size}, &lin, &col);
-
-    u32 scale = text_to_scale(info.type);
-    
-    u32 cw = fb_char_width(scale);
-    u32 lh = fb_line_height(scale);
-    u32 ls = fb_get_line_spacing(scale);
-    u32 ch = lh - ls;
-    
-    document_node *cursor = uno_create_view((node_info){.bg_color = text_info->selection.start || text_info->selection.end ? 0xFF555555 : text_info->cursor_color, .sizing_rule = size_absolute, .rect = (gpu_rect){(col * cw),(lin * lh), 3, ch}, .use_absolute_position = true}, (string_slice){});
-    
-    uno_end_depth();
 
     return node;
 }

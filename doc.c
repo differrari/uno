@@ -2,6 +2,7 @@
 #include "syscalls/syscalls.h"
 #include "math/math.h"
 #include "draw/textdraw.h"
+#include "uno.h"
 
 typedef struct {
     gpu_rect canvas;
@@ -13,12 +14,13 @@ typedef struct {
 } doc_layout_result;
 
 #define draw_text(ctx, rect) ({\
-gpu_size _s = {};\
+text_draw_result _r = {};\
 if (node->info.text_formatting.array_type != fmt_array_none){\
-    _s = fb_draw_text(ctx, node->content, rect, node->info.offset, (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);\
-} else \
-    _s = fb_draw_single_text(ctx, node->content, rect, node->info.offset,  (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy });\
-    _s;\
+    _r = fb_draw_text(ctx, node->content, rect, node->info.offset, (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);\
+} else {\
+    _r = fb_draw_single_text(ctx, node->content, rect, node->info.offset,  (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy });\
+}\
+_r;\
 });
 
 int text_to_scale(doc_text_size type){
@@ -137,12 +139,12 @@ doc_layout_result layout_doc_node(doc_layout layout, document_data doc, document
         int text_size = text_to_scale(node->info.type);
         if (!text_size) return (doc_layout_result){};
         draw_ctx ctx = {.width = layout.canvas.size.width - (node->info.padding * 2),.height = layout.canvas.size.height - (node->info.padding * 2)};
-        gpu_size label_rect = draw_text(&ctx, layout.canvas);
+        text_draw_result res = draw_text(&ctx, layout.canvas);
         // print("Label size %ix%i",label_rect.width,label_rect.height);
-        label_rect.width += node->info.padding * 2;
-        label_rect.height += node->info.padding * 2;
+        res.size.width += node->info.padding * 2;
+        res.size.height += node->info.padding * 2;
         //TODO better absolute positioning absolute 
-        if (node->info.sizing_rule == size_fit) node->info.rect.size = label_rect;
+        if (node->info.sizing_rule == size_fit) node->info.rect.size = res.size;
         result.force_newline = text_force_newline(node->info.type);
     }
     
@@ -225,8 +227,30 @@ void render_doc_node(draw_ctx *ctx, document_node *node){
                 node->info.rect.size.width - node->info.padding*2,
                 node->info.rect.size.height - node->info.padding*2
             }
-        };
-        draw_text(ctx, rect);
+        };    
+        
+        if (node->info.general_type == doc_gen_text && node->ctx){
+            text_field_info *in = node->ctx;
+
+            if (in->content->buffer_size == 0 && in->placeholder.length){
+                draw_text(ctx, rect);
+                return;
+            }
+
+            range_t string_range = {.start = 0, .size = in->content->cursor};
+            string_slice slice = { .data = in->content->buffer, in->content->buffer_size};
+            text_draw_result result = {};
+            fb_continuous_draw_text(ctx, false, &result.cursor, slice, &string_range, rect, &result.size, node->info.offset, (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);
+            if (ctx->fb) mark_dirty(ctx, rect.point.x, rect.point.y, result.size.width, result.size.height);
+            if (in->cursor_color) fb_fill_rect(ctx, result.cursor.x, result.cursor.y, 3, fb_line_height(text_size), 0xFFFFFFF);
+
+            //Nested buffers can go here
+
+            string_range = (range_t){.start = in->content->cursor, .size = in->content->buffer_size - in->content->cursor};
+            fb_continuous_draw_text(ctx, false, &result.cursor, slice, &string_range, rect, &result.size, node->info.offset, (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);
+            if (ctx->fb) mark_dirty(ctx, rect.point.x, rect.point.y, result.size.width, result.size.height);
+            
+        } else draw_text(ctx, rect);
     }
 }
 

@@ -38,7 +38,7 @@ typedef struct {
     color bg_color;
     color fg_color;
     
-    size_rule sizing_rule;
+    size_rule sizing_rule;//TODO: x,y
     gpu_rect rect;
     
     u32 padding;
