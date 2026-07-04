@@ -30,7 +30,7 @@ void draw_view(){
                         if (selected_x == x && selected_y == y) uno_create_empty_view((node_info){.bg_color = 0xFF123456 + 0x111111, .sizing_rule = size_fill, .padding = 5});
                         uno_create_view((node_info){ .type = doc_text_caption, .general_type = doc_gen_text, .sizing_rule = size_fill, .fg_color = 0xFFFFFFFF, .padding = 5},
                             slice_from_literal("red"));
-                        uno_create_view((node_info){ .type = doc_text_title, .general_type = doc_gen_text, .fg_color = 0xFFFFFFFF, .sizing_rule = size_fill,.horiz_alignment = horizontal_center,.vert_alignment = vertical_center},
+                        uno_create_view((node_info){ .type = doc_text_title, .general_type = doc_gen_text, .fg_color = 0xFFFFFFFF, .sizing_rule = size_fit,.horiz_alignment = horizontal_center,.vert_alignment = vertical_center},
                             slice_from_string(string_format("%i",(y *3)+x)));
                     });
                 }
@@ -39,6 +39,7 @@ void draw_view(){
         
         uno_text_field(field_lower,(node_info){ .sizing_rule = size_relative, .percentage = 0.35f, .bg_color = 0}, &info2);
     });
+    debug_document(default_doc_data);
 }
 
 int main(){

@@ -52,6 +52,8 @@ typedef struct {
     wrap_policy text_wrap_policy;
     
     text_format_arr text_formatting;
+
+    bool use_absolute_position;
     
 } node_info;
 

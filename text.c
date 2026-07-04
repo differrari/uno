@@ -55,7 +55,7 @@ bool uno_text_field_input(document_node *node, kbd_event event, u8 modifier){
                 break;
         }
         if (x_shift || y_shift)
-            uno_text_field_shift_cursor_node(node, x_shift,y_shift);
+            uno_text_field_shift_cursor_node(node, x_shift, y_shift);
         uno_refresh();
     }
     if (event.key == KEY_BACKSPACE){
@@ -85,7 +85,7 @@ bool uno_text_field_input(document_node *node, kbd_event event, u8 modifier){
         uno_refresh();
         return true;
     }
-    char c = hid_to_char(event.key, modifier);
+    char c = hid_to_char(event.key, modifier, 0);
     if (event.type == KEY_PRESS && c){
         buffer_write_to(content, &c, 1, content->cursor);
         uno_refresh();
@@ -192,7 +192,7 @@ void uno_text_field(int tag, node_info info, text_field_info *text_info){
     u32 ls = fb_get_line_spacing(scale);
     u32 ch = lh - ls;
     
-    document_node *cursor = uno_create_view((node_info){.bg_color = text_info->selection.start || text_info->selection.end ? 0xFF555555 : text_info->cursor_color, .sizing_rule = size_absolute, .rect = (gpu_rect){(col * cw),(lin * lh), 3, ch}}, (string_slice){});
+    document_node *cursor = uno_create_view((node_info){.bg_color = text_info->selection.start || text_info->selection.end ? 0xFF555555 : text_info->cursor_color, .sizing_rule = size_absolute, .rect = (gpu_rect){(col * cw),(lin * lh), 3, ch}, .use_absolute_position = true}, (string_slice){});
     
     uno_end_depth();
 }
