@@ -46,11 +46,11 @@ bool uno_text_field_input(document_node *node, kbd_event event, u8 modifier){
             case KEY_DOWN:  y_shift = 1; break;
             case KEY_UP:    y_shift = -1; break;
             case KEY_PAGEDOWN:  
-                // y_shift = (ctx.height/line_height)-1;//DEADLINE: 2026-06-09 patent on PGUP/PGDOWN expires
+                // y_shift = (ctx.height/line_height)-1;
                 // offset.y -= ctx.height;
                 break;
             case KEY_PAGEUP: 
-                // y_shift = -(ctx.height/line_height)-1;//DEADLINE: 2026-06-09 patent on PGUP/PGDOWN expires
+                // y_shift = -(ctx.height/line_height)-1;
                 // offset.y += ctx.height;
                 break;
         }
