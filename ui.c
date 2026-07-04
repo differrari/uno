@@ -15,13 +15,14 @@ buffer other_text_string = {};
 
 enum { field_none, field_upper, field_lower };
 
+text_field_info info = (text_field_info){&text_string, SLICE_LIT("PLACEHOLDER")};
+text_field_info info2 = (text_field_info){ .content = &other_text_string, .placeholder = SLICE_LIT("OTHER PLACEHOLDER")};
+
 void draw_view(){
     if (!text_string.buffer) text_string = buffer_create(0x100, buffer_can_grow);
     if (!other_text_string.buffer) other_text_string = buffer_create(0x100, buffer_can_grow);
-    text_field_info info = (text_field_info){&text_string, slice_from_literal("PLACEHOLDER")};
-    text_field_info info2 = (text_field_info){ .content = &other_text_string, .placeholder = slice_from_literal("OTHER PLACEHOLDER")};
     VERTICAL(((node_info){ doc_layout_vertical, doc_gen_layout, .sizing_rule = size_fill, .bg_color = 0xFF123456 + 0x050505 }), {
-        uno_text_field(field_upper,(node_info){.sizing_rule = size_relative, .percentage = 0.05f, .bg_color = 0}, &info);
+        uno_text_field(field_upper, (node_info){.sizing_rule = size_relative, .percentage = 0.05f, .bg_color = 0}, &info);
         for (int y = 0; y < MAX_ROWS; y++){
             HORIZONTAL(((node_info){ .type = doc_layout_horizontal, .general_type = doc_gen_layout, .sizing_rule = size_fill}),{
                 for (int x = 0; x < MAX_COLS; x++){
@@ -61,7 +62,7 @@ int main(){
             if (ev.key == KEY_ESC) return 0;  
             if (ev.type == KEY_PRESS){
                 bool changed = false;
-                if (!uno_dispatch_kbd(ev)){
+                if (!uno_dispatch_kbd(ev, 0)){
                     switch (ev.key) {
                         case KEY_LEFT:  changed = true; selected_x = (selected_x - 1 + MAX_COLS) % MAX_COLS; break;
                         case KEY_RIGHT: changed = true; selected_x = (selected_x + 1) % MAX_COLS; break;
