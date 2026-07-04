@@ -4,18 +4,18 @@
 #include "doc.h"
 #include "files/buffer.h"
 
-void uno_begin_vertical(node_info info);
+document_node* uno_begin_vertical(node_info info);
 void uno_end_vertical();
 
-void uno_begin_horizontal(node_info info);
+document_node* uno_begin_horizontal(node_info info);
 void uno_end_horizontal();
 
-void uno_begin_depth(node_info info);
+document_node* uno_begin_depth(node_info info);
 void uno_end_depth();
 
 void uno_attach(document_node *parent, document_node *child);
 
-void uno_create_empty_view(node_info info);
+document_node* uno_create_empty_view(node_info info);
 document_node* uno_create_view(node_info info, string_slice content);
 
 typedef struct {
@@ -32,9 +32,10 @@ typedef struct {
     select_range selection;
 } text_field_info;
 
-void uno_text_field(int tag, node_info info, text_field_info *text_info);
+document_node* uno_text_field(int tag, node_info info, text_field_info *text_info);
 void uno_text_field_scroll(int tag, i32 x_shift, i32 y_shift);
 void uno_text_field_shift_cursor(int tag, i32 x_shift, i32 y_shift);
+bool uno_text_field_mouse(document_node *node, mouse_data data, u8 modifier);
 
 typedef struct {
     void (*press)(int buttonIndex, gpu_point location);

@@ -163,7 +163,7 @@ bool uno_text_field_paste(document_node* node, void* buf, size_t size){
     return true;
 }
 
-void uno_text_field(int tag, node_info info, text_field_info *text_info){
+document_node* uno_text_field(int tag, node_info info, text_field_info *text_info){
     info.general_type = doc_gen_text;
     if (info.type == doc_text_none) info.type = doc_text_footnote;
     if (!((info.fg_color >> 24) & 0xFF)) info.fg_color |= 0xFF << 24;
@@ -195,6 +195,8 @@ void uno_text_field(int tag, node_info info, text_field_info *text_info){
     document_node *cursor = uno_create_view((node_info){.bg_color = text_info->selection.start || text_info->selection.end ? 0xFF555555 : text_info->cursor_color, .sizing_rule = size_absolute, .rect = (gpu_rect){(col * cw),(lin * lh), 3, ch}, .use_absolute_position = true}, (string_slice){});
     
     uno_end_depth();
+
+    return node;
 }
 
 void uno_text_field_scroll_node(document_node *node, i32 x_shift, i32 y_shift){

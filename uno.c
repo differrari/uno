@@ -48,7 +48,7 @@ void uno_state_pop(){
     }
 }
 
-void uno_begin_vertical(node_info info){
+document_node* uno_begin_vertical(node_info info){
     info.general_type = doc_gen_layout;
     info.type = doc_layout_vertical;
     document_node* vert = uno_make_view(info);
@@ -58,13 +58,14 @@ void uno_begin_vertical(node_info info){
     if (current_node)
         uno_attach(current_node, vert);
     uno_state_push(vert);
+    return vert;
 }
 
 void uno_end_vertical(){
-    uno_state_pop();
+    return uno_state_pop();
 }
 
-void uno_begin_horizontal(node_info info){
+document_node* uno_begin_horizontal(node_info info){
     info.general_type = doc_gen_layout;
     info.type = doc_layout_horizontal;
     document_node* horiz = uno_make_view(info);
@@ -74,13 +75,14 @@ void uno_begin_horizontal(node_info info){
     if (current_node)
         uno_attach(current_node, horiz);
     uno_state_push(horiz);
+    return horiz;
 }
 
 void uno_end_horizontal(){
     uno_state_pop();
 }
 
-void uno_begin_depth(node_info info){
+document_node* uno_begin_depth(node_info info){
     info.general_type = doc_gen_layout;
     info.type = doc_layout_depth;
     document_node* depth = uno_make_view(info);
@@ -90,6 +92,7 @@ void uno_begin_depth(node_info info){
     if (current_node)
         uno_attach(current_node, depth);
     uno_state_push(depth);
+    return depth;
 }
 
 void uno_end_depth(){
@@ -107,12 +110,13 @@ document_node* uno_create_view(node_info info, string_slice content){
     return node;
 }
 
-void uno_create_empty_view(node_info info){
+document_node* uno_create_empty_view(node_info info){
     document_node* node = uno_make_view(info);
     if (!default_doc_data.root)
         default_doc_data.root = node;
     if (current_node)
         uno_attach(current_node, node);
+    return node;
 }
 
 void uno_destroy_node(void *ptr){

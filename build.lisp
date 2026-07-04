@@ -1,6 +1,6 @@
 (load "~/redbuild/v3/redbuild.lisp")
 
-(redbuild:set-tester "ui.c")
+; (redbuild:set-tester "ui.c")
 
 (redbuild:quick-build (redbuild:make-instance `redbuild:redmod
         :name "uno"
