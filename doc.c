@@ -242,7 +242,7 @@ void render_doc_node(draw_ctx *ctx, document_node *node){
             text_draw_result result = {};
             fb_continuous_draw_text(ctx, false, &result.cursor, slice, &string_range, rect, &result.size, node->info.offset, (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);
             if (ctx->fb) mark_dirty(ctx, rect.point.x, rect.point.y, result.size.width, result.size.height);
-            if (in->cursor_color) fb_fill_rect(ctx, result.cursor.x, result.cursor.y, 3, fb_line_height(text_size), 0xFFFFFFF);
+            if (in->cursor_color) fb_fill_rect(ctx, rect.point.x + result.cursor.x, rect.point.y + result.cursor.y, 3, fb_line_height(text_size), in->cursor_color);
 
             //Nested buffers can go here
 

@@ -171,7 +171,6 @@ document_node* uno_text_field(int tag, node_info info, text_field_info *text_inf
     info.offset = text_info->offset;
 
     node_info text_node_info = info;
-    text_node_info.sizing_rule = size_fill;
     info.general_type = doc_gen_text;
     document_node *node = uno_create_view(text_node_info, text_info->content && text_info->content->buffer && text_info->content->buffer_size ? (string_slice){.data = text_info->content->buffer, .length = text_info->content->buffer_size } : text_info->placeholder);
     node->input.keyboard_input = uno_text_field_input;

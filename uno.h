@@ -36,6 +36,7 @@ document_node* uno_text_field(int tag, node_info info, text_field_info *text_inf
 void uno_text_field_scroll(int tag, i32 x_shift, i32 y_shift);
 void uno_text_field_shift_cursor(int tag, i32 x_shift, i32 y_shift);
 bool uno_text_field_mouse(document_node *node, mouse_data data, u8 modifier);
+bool uno_text_field_input(document_node *node, kbd_event event, u8 modifier);
 
 typedef struct {
     void (*press)(int buttonIndex, gpu_point location);
