@@ -258,9 +258,7 @@ void render_document(draw_ctx *ctx, document_data doc){
     render_doc_node(ctx, doc.root);
 }
 
-char *indent = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
-#define MAX_DEPTH 64
-#define indent_by(depth) (indent + (MAX_DEPTH-depth))
+#include "utils/indent.h"
 
 void debug_node(document_node *node, int depth){
     if (!node) return;
