@@ -32,12 +32,12 @@ bool uno_text_field_input(document_node *node, kbd_event event, u8 modifier){
     buffer *content = info->content;
     if (!content || !content->buffer) return false;
     if (event.key == KEY_ENTER && !info->multiline) return false;
-    if (event.type != KEY_PRESS) return false;
+    if (event.type != KEY_PRESS && event.type != KEY_CONTINUE) return false;
     if (event.key == KEY_HOME)
         uno_text_field_scroll_in_line(node, true);
-    if (event.key == KEY_END)
+    else if (event.key == KEY_END)
         uno_text_field_scroll_in_line(node, false);
-    else if (event.type == KEY_PRESS && ((event.key >= KEY_RIGHT && event.key <= KEY_UP) || event.key == KEY_PAGEUP || event.key == KEY_PAGEDOWN )){
+    else if (((event.key >= KEY_RIGHT && event.key <= KEY_UP) || event.key == KEY_PAGEUP || event.key == KEY_PAGEDOWN )){
         i32 x_shift = 0;
         i32 y_shift = 0;
         switch (event.key) {
@@ -80,13 +80,13 @@ bool uno_text_field_input(document_node *node, kbd_event event, u8 modifier){
         return true;
     }
     if (event.key == KEY_TAB){
-        char *indent = "\t\t\t\t";
-        buffer_write_to(content, indent, 4, content->cursor);
+        char *indent = "\t";
+        buffer_write_to(content, indent, 1, content->cursor);
         uno_refresh();
         return true;
     }
     char c = hid_to_char(event.key, modifier, 0);
-    if (event.type == KEY_PRESS && c){
+    if (c){
         buffer_write_to(content, &c, 1, content->cursor);
         uno_refresh();
         return true;
