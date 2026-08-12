@@ -118,14 +118,9 @@ bool uno_text_field_mouse(document_node *node, mouse_data data, u8 modifier){
     buffer *content = info->content;
     if (!content || !content->buffer) return res;
     
-    i32 x = data.position.x/fb_get_char_size(text_to_scale(node->info.type));
-    i32 y = data.position.y/(fb_get_char_size(text_to_scale(node->info.type)) + 2);//TODO: line padding should be customizable
-    float oy = (float)node->info.offset.y/((i32)fb_get_char_size(text_to_scale(node->info.type)) + 2.f);
-    
-    float ox = (float)node->info.offset.x/(i32)fb_get_char_size(text_to_scale(node->info.type));
-
-    x -= round_to_int(ox);
-    y -= round_to_int(oy);
+    i32 x = (data.position.x-node->info.offset.x)/fb_get_char_size(text_to_scale(node->info.type));
+    i32 y = (data.position.y-node->info.offset.y)/(fb_line_height(text_to_scale(node->info.type)));//TODO: line padding should be customizable
+ 
     u32 selection = lin_col_to_pos(y, x, (string_slice){content->buffer,content->buffer_size});
     
     if (modifier & KEY_MOD_LSHIFT){
