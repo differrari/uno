@@ -3,6 +3,7 @@
 #include "types.h"
 #include "doc.h"
 #include "files/buffer.h"
+#include "data/struct/bt_tree.h"
 
 document_node* uno_begin_vertical(node_info info);
 void uno_end_vertical();
@@ -24,7 +25,19 @@ typedef struct {
 } select_range;
 
 typedef struct {
-    buffer *content;
+    int buffer_index;
+    range_t range;
+} uno_text_piece;
+
+typedef struct {
+    union {
+        struct {
+            buffer *content;
+            buffer *gap;
+        };
+        buffer *children[2];
+    };
+    bt_tree *piece_tree;
     string_slice placeholder;
     bool multiline;
     color cursor_color;
@@ -32,6 +45,8 @@ typedef struct {
     select_range selection;
 } text_field_info;
 
+bt_tree uno_text_make_piece_tree();
+void uno_text_piece_identity(text_field_info *info);
 document_node* uno_text_field(int tag, node_info info, text_field_info *text_info);
 void uno_text_field_scroll(int tag, i32 x_shift, i32 y_shift);
 void uno_text_field_shift_cursor(int tag, i32 x_shift, i32 y_shift);

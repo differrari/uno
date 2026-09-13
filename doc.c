@@ -1,8 +1,10 @@
 #include "doc.h"
+#include "files/buffer.h"
 #include "syscalls/syscalls.h"
 #include "math/math.h"
 #include "draw/textdraw.h"
 #include "uno.h"
+#include "data/struct/bt_tree.h"
 
 typedef struct {
     gpu_rect canvas;
@@ -207,6 +209,26 @@ void layout_document(gpu_rect canvas, document_data doc){
     layout_doc_node_pos(layout, doc.root);
 }
 
+void render_text_section(draw_ctx *ctx, range_t string_range, string_slice slice, gpu_rect rect, gpu_point scroll, text_draw_result *result, text_format default_format, text_format_arr text_formatting){
+    fb_continuous_draw_text(ctx, false, &result->cursor, slice, &string_range, rect, &result->size, scroll, default_format, text_formatting);
+    if (ctx->fb) mark_dirty(ctx, rect.point.x, rect.point.y, result->size.width, result->size.height);
+}
+
+void render_piece_tree(draw_ctx *ctx, text_field_info *info, document_node *doc_node, gpu_rect rect, gpu_point scroll, text_draw_result *result, text_format default_format, text_format_arr text_formatting){
+    bt_tree_traversal traversal = {
+        .tree = info->piece_tree
+    };
+
+    bt_node *node = 0;
+    while ((node = bt_tree_next(&traversal))){
+        uno_text_piece *piece = (uno_text_piece*)node->data;
+        if (piece->buffer_index >= 2) continue;
+        // print("Rendering from buffer %i at %i-%i %i",piece->buffer_index,piece->range.start,piece->range.size,info->piece_tree->data_size);
+        fb_continuous_draw_text(ctx, false, &result->cursor, slice_from_buffer(info->children[piece->buffer_index]), &piece->range, rect, &result->size, scroll, default_format, text_formatting);
+        if (ctx->fb) mark_dirty(ctx, rect.point.x, rect.point.y, result->size.width, result->size.height);
+    }
+}
+
 void render_doc_node(draw_ctx *ctx, document_node *node){
     if (!node) return;
     if (node->info.bg_color){
@@ -219,37 +241,38 @@ void render_doc_node(draw_ctx *ctx, document_node *node){
         }
     if (node->content.length){
         int text_size = text_to_scale(node->info.type);
-        gpu_rect rect = (gpu_rect){ 
-            { 
-                node->info.rect.point.x + node->info.offset.x + node->info.padding, 
-                node->info.rect.point.y + node->info.offset.y + node->info.padding
-            }, { 
+        gpu_rect rect = (gpu_rect){
+            {
+                node->info.rect.point.x + node->info.padding,
+                node->info.rect.point.y + node->info.padding
+            }, {
                 node->info.rect.size.width - node->info.padding*2,
                 node->info.rect.size.height - node->info.padding*2
             }
-        };    
-        
+        };
+
         if (node->info.general_type == doc_gen_text && node->ctx){
             text_field_info *in = node->ctx;
 
-            if (in->content->buffer_size == 0 && in->placeholder.length){
+            if (((in->piece_tree && !in->piece_tree->count) || (!in->piece_tree && in->content->buffer_size == 0)) && in->placeholder.length){
                 draw_text(ctx, rect);
                 return;
             }
 
-            range_t string_range = {.start = 0, .size = in->content->cursor};
             string_slice slice = { .data = in->content->buffer, in->content->buffer_size};
             text_draw_result result = {};
-            fb_continuous_draw_text(ctx, false, &result.cursor, slice, &string_range, rect, &result.size, node->info.offset, (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);
-            if (ctx->fb) mark_dirty(ctx, rect.point.x, rect.point.y, result.size.width, result.size.height);
-            if (in->cursor_color) fb_fill_rect(ctx, rect.point.x + result.cursor.x, rect.point.y + result.cursor.y, 3, fb_line_height(text_size), in->cursor_color);
 
-            //Nested buffers can go here
+            if (!in->piece_tree){
+                render_text_section(ctx,(range_t){.start = 0, .size = in->content->cursor},slice, rect, node->info.offset, &result, (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);
 
-            string_range = (range_t){.start = in->content->cursor, .size = in->content->buffer_size - in->content->cursor};
-            fb_continuous_draw_text(ctx, false, &result.cursor, slice, &string_range, rect, &result.size, node->info.offset, (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);
-            if (ctx->fb) mark_dirty(ctx, rect.point.x, rect.point.y, result.size.width, result.size.height);
-            
+                // if (in->gap) //TODO: put the gap buffer here
+                if (in->cursor_color) fb_fill_rect(ctx, rect.point.x + result.cursor.x, rect.point.y + result.cursor.y, 3, fb_line_height(text_size), in->cursor_color);
+
+                render_text_section(ctx,(range_t){.start = in->content->cursor, .size = in->content->buffer_size - in->content->cursor},slice, rect, node->info.offset, &result, (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);
+            } else {
+                render_piece_tree(ctx, in, node,  rect, node->info.offset, &result, (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);
+            }
+
         } else draw_text(ctx, rect);
     }
 }

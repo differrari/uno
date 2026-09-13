@@ -1,11 +1,27 @@
+#include "data/struct/bt_tree.h"
 #include "doc.h"
+#include "files/buffer.h"
+#include "types.h"
 #include "uno.h"
 #include "math/math.h"
 #include "input_keycodes.h"
 #include "draw/textdraw.h"
+#include "syscalls/syscalls.h"
 
 void uno_text_field_shift_cursor_node(document_node *node, i32 x_shift, i32 y_shift);
 extern document_node* uno_find_node(document_node *node, int tag);
+
+bt_tree uno_text_make_piece_tree(){
+    return bt_tree_create(sizeof(uno_text_piece), bt_balancing_rb);
+}
+
+void uno_text_piece_identity(text_field_info *info){
+    bt_reset(info->piece_tree);
+    bt_tree_insert(info->piece_tree, &(uno_text_piece){
+        .buffer_index = 0,
+        .range = (range_t){0,info->content->buffer_size}
+    }, 0);
+}
 
 void uno_text_field_scroll_in_line(document_node *node, bool begin){
     if (!node || !node->ctx) return;
@@ -87,7 +103,16 @@ bool uno_text_field_input(document_node *node, kbd_event event, u8 modifier){
     }
     char c = hid_to_char(event.key, modifier, 0);
     if (c){
-        buffer_write_to(content, &c, 1, content->cursor);
+        if (info->piece_tree && info->gap){
+            if (buffer_write_lim(info->gap, &c, 1)){
+                bt_tree_insert(info->piece_tree, &(uno_text_piece){
+                    .buffer_index = 1,
+                    .range = {info->gap->cursor-1,1}
+                }, info->piece_tree->count);
+            }
+        } else {
+            buffer_write_to(content, &c, 1, content->cursor);
+        }
         uno_refresh();
         return true;
     }
