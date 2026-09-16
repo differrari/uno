@@ -41,7 +41,7 @@ typedef struct {
     string_slice placeholder;
     bool multiline;
     color cursor_color;
-    gpu_point offset;
+    gpu_point *offset;
     select_range selection;
     
     size_t total_size; 

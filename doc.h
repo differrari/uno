@@ -47,7 +47,7 @@ typedef struct {
     horizontal_alignment horiz_alignment;
     vertical_alignment vert_alignment;
     
-    gpu_point offset;
+    gpu_point *offset;
     
     wrap_policy text_wrap_policy;
     

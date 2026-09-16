@@ -199,8 +199,8 @@ bool uno_text_field_mouse(document_node *node, mouse_data data, u8 modifier){
     buffer *content = info->content;
     if (!content || !content->buffer) return res;
     
-    i32 x = (data.position.x-node->info.offset.x)/fb_get_char_size(text_to_scale(node->info.type));
-    i32 y = (data.position.y-node->info.offset.y)/(fb_line_height(text_to_scale(node->info.type)));//TODO: line padding should be customizable
+    i32 x = (data.position.x-(node->info.offset ? node->info.offset->x : 0))/fb_get_char_size(text_to_scale(node->info.type));
+    i32 y = (data.position.y-(node->info.offset ? node->info.offset->y : 0))/(fb_line_height(text_to_scale(node->info.type)));//TODO: line padding should be customizable
  
     u32 selection = lin_col_to_pos(y, x, (string_slice){content->buffer,content->buffer_size});
     
@@ -268,12 +268,16 @@ void uno_text_field_scroll_node(document_node *node, i32 x_shift, i32 y_shift){
     u8 cw = fb_line_height(text_to_scale(node->info.type));
     u8 lh = fb_line_height(text_to_scale(node->info.type));
     if (x_shift != 0){
-        if (info->offset.x + x_shift > 0) info->offset.x = 0;
-        else info->offset.x += x_shift * cw;
+        if (info->offset){
+            if (info->offset->x + x_shift > 0) info->offset->x = 0;
+            else info->offset->x += x_shift * cw;
+        }
     }
     if (y_shift != 0){
-        if (info->offset.y + y_shift > 0) info->offset.y = 0;
-        else info->offset.y += y_shift * lh;   
+        if (info->offset){
+            if (info->offset->y + y_shift > 0) info->offset->y = 0;
+            else info->offset->y += y_shift * lh;   
+        }
     }
 }
 
@@ -297,7 +301,7 @@ void uno_text_field_shift_cursor_node(document_node *node, i32 x_shift, i32 y_sh
         i32 lin, col = 0;
         string_slice slice = (string_slice){content->buffer,content->buffer_size};
         pos_to_lin_col(content->cursor, slice, &lin, &col);
-        i32 dis = col + (info->offset.x/cw) - (node->info.rect.size.width/cw);
+        i32 dis = col + ((info->offset ? info->offset->x : 0)/cw) - (node->info.rect.size.width/cw);
         if (dis >= 0) uno_text_field_scroll_node(node, -dis, 0);
         else if (-dis > node->info.rect.size.width/cw) uno_text_field_scroll_node(node, -((node->info.rect.size.width/cw)+dis), 0);
     }
@@ -308,7 +312,7 @@ void uno_text_field_shift_cursor_node(document_node *node, i32 x_shift, i32 y_sh
         if (lin + y_shift < 0) lin = 0;
         else lin += y_shift;
         content->cursor = lin_col_to_pos(lin, col, slice);
-        i32 dis = lin + (info->offset.y/lh) - (node->info.rect.size.height/lh);
+        i32 dis = lin + ((info->offset ? info->offset->y : 0)/lh) - (node->info.rect.size.height/lh);
         if (dis >= 0) uno_text_field_scroll_node(node, 0, -dis);
         else if (-dis > node->info.rect.size.height/lh) uno_text_field_scroll_node(node, 0, -((node->info.rect.size.height/lh)+dis));
     }

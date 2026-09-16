@@ -19,9 +19,9 @@ typedef struct {
 #define draw_text(ctx, rect) ({\
 text_draw_result _r = {};\
 if (node->info.text_formatting.array_type != fmt_array_none){\
-    _r = fb_draw_text(ctx, node->content, rect, node->info.offset, (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);\
+    _r = fb_draw_text(ctx, node->content, rect, (node->info.offset ? *node->info.offset : (gpu_point){}), (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);\
 } else {\
-    _r = fb_draw_single_text(ctx, node->content, rect, node->info.offset,  (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy });\
+    _r = fb_draw_single_text(ctx, node->content, rect, (node->info.offset ? *node->info.offset : (gpu_point){}),  (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy });\
 }\
 _r;\
 });
@@ -56,9 +56,10 @@ static inline float layout_get_size(doc_layout_types direction, gpu_rect rect){
     return 0;
 }
 
-static inline float layout_get_offset(doc_layout_types direction, gpu_point point){
-    if (direction == doc_layout_horizontal) return -point.x;
-    if (direction == doc_layout_vertical || direction == doc_layout_depth) return point.y;
+static inline float layout_get_offset(doc_layout_types direction, gpu_point *point){
+    if (!point) return 0;
+    if (direction == doc_layout_horizontal) return -point->x;
+    if (direction == doc_layout_vertical || direction == doc_layout_depth) return point->y;
     return 0;
 }
 
@@ -192,9 +193,9 @@ void layout_doc_node_pos(doc_layout layout, document_node *node){
         layout.direction = node->info.type;
     }
 
-    if (node->info.general_type != doc_gen_text){
-        layout.canvas.point.x += node->info.offset.x;
-        layout.canvas.point.y += node->info.offset.y;
+    if (node->info.general_type != doc_gen_text && node->info.offset){
+        layout.canvas.point.x += node->info.offset->x;
+        layout.canvas.point.y += node->info.offset->y;
     }
     
     layout.canvas.point.x += node->info.padding;
@@ -280,14 +281,14 @@ void render_doc_node(draw_ctx *ctx, document_node *node){
             text_draw_result result = {};
 
             if (!in->piece_tree){
-                render_text_section(ctx,(range_t){.start = 0, .size = in->content->cursor},slice, rect, node->info.offset, &result, (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);
+                render_text_section(ctx,(range_t){.start = 0, .size = in->content->cursor},slice, rect, node->info.offset ? *node->info.offset : (gpu_point){}, &result, (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);
 
                 // if (in->gap) //TODO: put the gap buffer here
                 if (in->cursor_color) fb_fill_rect(ctx, rect.point.x + result.cursor.x, rect.point.y + result.cursor.y, 3, fb_line_height(text_size), in->cursor_color);
 
-                render_text_section(ctx,(range_t){.start = in->content->cursor, .size = in->content->buffer_size - in->content->cursor},slice, rect, node->info.offset, &result, (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);
+                render_text_section(ctx,(range_t){.start = in->content->cursor, .size = in->content->buffer_size - in->content->cursor},slice, rect, node->info.offset ? *node->info.offset : (gpu_point){}, &result, (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);
             } else {
-                render_piece_tree(ctx, in, node,  rect, node->info.offset, &result, (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);
+                render_piece_tree(ctx, in, node,  rect, node->info.offset ? *node->info.offset : (gpu_point){}, &result, (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);
             }
 
         } else draw_text(ctx, rect);
