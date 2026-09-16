@@ -43,10 +43,18 @@ typedef struct {
     color cursor_color;
     gpu_point offset;
     select_range selection;
+    
+    size_t total_size; 
+    size_t cursor_count;
+    size_t cursor_limit;
+    uptr *cursors;
+    
 } text_field_info;
 
 bt_tree uno_text_make_piece_tree();
 void uno_text_piece_identity(text_field_info *info);
+void uno_text_add_piece(text_field_info *info, uno_text_piece piece, i64 position);
+
 document_node* uno_text_field(int tag, node_info info, text_field_info *text_info);
 void uno_text_field_scroll(int tag, i32 x_shift, i32 y_shift);
 void uno_text_field_shift_cursor(int tag, i32 x_shift, i32 y_shift);
@@ -62,12 +70,12 @@ void uno_button(int tag, node_info info, button_info *b_info, string_slice label
 
 void uno_label(node_info info, doc_text_size size, string_slice content);
 
-void set_document_view(void (*view_builder)(), gpu_rect canvas);
+void uno_set_document_view(void (*view_builder)(), gpu_rect canvas);
 document_data get_current_document_view();
 void uno_refresh();
 void uno_refresh_layout();
 
-void uno_draw(draw_ctx *ctx);
+bool uno_draw(draw_ctx *ctx);
 
 void uno_focus(int tag);
 bool uno_dispatch_kbd(kbd_event ev, u8 modifier);

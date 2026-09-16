@@ -131,10 +131,17 @@ void uno_destroy_node(void *ptr){
     release(node);
 }
 
-void set_document_view(void (*view_builder)(), gpu_rect canvas){
+void uno_set_document_view(void (*view_builder)(), gpu_rect canvas){
     view_build_func = view_builder;
     default_canvas = canvas;
     uno_refresh();
+}
+
+bool uno_doc_dirty = false;
+bool uno_always_redraw = false;
+
+void uno_redraw_always(){
+    uno_always_redraw = true;
 }
 
 document_data get_current_document_view(){
@@ -149,14 +156,18 @@ void uno_refresh(){
     if (view_build_func) view_build_func();
     uno_refresh_layout();
     if (focused_tag) uno_focus(focused_tag);
+    uno_doc_dirty = true;
 }
 
 void uno_refresh_layout(){
     layout_document(default_canvas, default_doc_data);
 }
 
-void uno_draw(draw_ctx *ctx){
+bool uno_draw(draw_ctx *ctx){
+    if (!uno_doc_dirty && !uno_always_redraw) return false;
+    uno_doc_dirty = false;
     render_document(ctx, default_doc_data);
+    return true;
 }
 
 document_node* uno_find_node(document_node *node, int tag){

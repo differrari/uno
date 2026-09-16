@@ -24,8 +24,8 @@ typedef enum { doc_layout_none, doc_layout_vertical, doc_layout_horizontal, doc_
 typedef enum { doc_gen_type_none, doc_gen_text, doc_gen_layout, doc_gen_button } doc_gen_type;
 
 typedef enum { 
-    size_none, //No rules for size
     size_fit, //Fit to content
+    size_none, //No rules for size
     size_fill, //Fill parent
     size_relative, //Percentage of parent
     size_absolute //Absolute positioning within parent

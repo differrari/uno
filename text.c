@@ -15,12 +15,68 @@ bt_tree uno_text_make_piece_tree(){
     return bt_tree_create(sizeof(uno_text_piece), bt_balancing_rb);
 }
 
+tern uno_text_find_closest(void *ctx, bt_tree * tree, bt_node *node){
+    range_t *new_range = ctx;
+    uno_text_piece *piece = (uno_text_piece*)node->data;
+    size_t old_size = piece->range.size;
+    if (node->key == new_range->start) return 0;
+    if (node->key < new_range->start && node->key + old_size > new_range->start) return 0;
+    if (node->key >= new_range->start + new_range->size) return -1;
+    return 1;
+}
+
+void uno_text_piece_shift_by_until(bt_tree *tree, i64 offset, bt_node *until){
+    bt_tree_traversal traversal = {
+        .tree = tree,
+        .backwards = true,
+    };
+
+    bt_node *node = 0;
+    while ((node = bt_tree_next(&traversal))){
+        node->key += offset;
+        if (node == until) break;
+    }
+}
+
+void uno_text_add_piece(text_field_info *info, uno_text_piece piece, i64 cursor_index){
+    if (info->cursor_count < cursor_index) return;
+    
+    i64 position = info->cursors[cursor_index];
+    range_t new_range = {position,piece.range.size};
+    bt_node *existing_node = bt_tree_find_node(info->piece_tree, 0, &new_range, uno_text_find_closest);
+    if (existing_node){
+        uno_text_piece *old_piece = (uno_text_piece*)existing_node->data;
+        range_t old_range = old_piece->range;
+        // print("Found existing node %i - %r",existing_node->key,old_range);
+        if (existing_node->key < new_range.start && existing_node->key + old_range.size > new_range.start){
+            // print("Need to split");
+            i64 offset = position-existing_node->key;
+            uno_text_piece lh = { .buffer_index = old_piece->buffer_index, .range = {.start = old_piece->range.start, .size = offset } };
+            uno_text_piece rh = { .buffer_index = old_piece->buffer_index, .range = {.start = old_piece->range.start + offset, .size = old_piece->range.size - offset } };
+            //delete the node off the tree, save its key and piece
+            bt_tree_insert(info->piece_tree, &lh, existing_node->key);
+            bt_node *new_bound = bt_tree_insert(info->piece_tree, &rh, existing_node->key + offset);
+            uno_text_piece_shift_by_until(info->piece_tree, new_range.size, new_bound);
+            bt_tree_remove(info->piece_tree, existing_node);
+        } else {
+            uno_text_piece_shift_by_until(info->piece_tree, new_range.size, existing_node);
+        }
+    }
+    
+    bt_tree_insert(info->piece_tree, &piece, position);
+    info->cursors[cursor_index] += piece.range.size;
+}
+
 void uno_text_piece_identity(text_field_info *info){
     bt_reset(info->piece_tree);
-    bt_tree_insert(info->piece_tree, &(uno_text_piece){
+    info->total_size = 0;
+    for (int i = 0; i < info->cursor_count; i++)
+        info->cursors[i] = 0;
+    uno_text_add_piece(info,(uno_text_piece){
         .buffer_index = 0,
         .range = (range_t){0,info->content->buffer_size}
     }, 0);
+    info->cursors[0] = 0;
 }
 
 void uno_text_field_scroll_in_line(document_node *node, bool begin){
@@ -105,10 +161,10 @@ bool uno_text_field_input(document_node *node, kbd_event event, u8 modifier){
     if (c){
         if (info->piece_tree && info->gap){
             if (buffer_write_lim(info->gap, &c, 1)){
-                bt_tree_insert(info->piece_tree, &(uno_text_piece){
+                uno_text_add_piece(info,(uno_text_piece){
                     .buffer_index = 1,
                     .range = {info->gap->cursor-1,1}
-                }, info->piece_tree->count);
+                }, 0);
             }
         } else {
             buffer_write_to(content, &c, 1, content->cursor);

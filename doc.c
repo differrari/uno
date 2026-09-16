@@ -1,5 +1,6 @@
 #include "doc.h"
 #include "files/buffer.h"
+#include "graphic_types.h"
 #include "syscalls/syscalls.h"
 #include "math/math.h"
 #include "draw/textdraw.h"
@@ -49,13 +50,19 @@ int text_force_newline(doc_text_size type){
     return false;
 }
 
-float layout_get_size(doc_layout_types direction, gpu_rect rect){
+static inline float layout_get_size(doc_layout_types direction, gpu_rect rect){
     if (direction == doc_layout_horizontal) return rect.size.width;
     if (direction == doc_layout_vertical || direction == doc_layout_depth) return rect.size.height;
     return 0;
 }
 
-void layout_set_size(doc_layout_types direction, doc_layout *layout, float size){
+static inline float layout_get_offset(doc_layout_types direction, gpu_point point){
+    if (direction == doc_layout_horizontal) return -point.x;
+    if (direction == doc_layout_vertical || direction == doc_layout_depth) return point.y;
+    return 0;
+}
+
+static inline void layout_set_size(doc_layout_types direction, doc_layout *layout, float size){
     if (direction == doc_layout_horizontal) layout->canvas.size.width = size;
     if (direction == doc_layout_vertical) layout->canvas.size.height = size;
 }
@@ -95,8 +102,9 @@ doc_layout_result layout_doc_node(doc_layout layout, document_data doc, document
         layout.canvas.size.height -= node->info.padding * 2;    
     }
     float total_size = layout_get_size(layout.direction, layout.canvas);
+    float overflow = layout_get_offset(layout.direction, node->info.offset);
     if (node->children){
-        float remaining_size = total_size;
+        float remaining_size = total_size+overflow;
         int remaining_children = 0;
         for (linked_list_node_t *n = node->children->head; n; n = n->next){
             if (!n->data) break;
@@ -142,7 +150,7 @@ doc_layout_result layout_doc_node(doc_layout layout, document_data doc, document
         if (!text_size) return (doc_layout_result){};
         draw_ctx ctx = {.width = layout.canvas.size.width - (node->info.padding * 2),.height = layout.canvas.size.height - (node->info.padding * 2)};
         text_draw_result res = draw_text(&ctx, layout.canvas);
-        // print("Label size %ix%i",label_rect.width,label_rect.height);
+        // print("Label size %ix%i",res.size.width,res.size.height);
         res.size.width += node->info.padding * 2;
         res.size.height += node->info.padding * 2;
         //TODO better absolute positioning absolute 
@@ -184,6 +192,11 @@ void layout_doc_node_pos(doc_layout layout, document_node *node){
         layout.direction = node->info.type;
     }
 
+    if (node->info.general_type != doc_gen_text){
+        layout.canvas.point.x += node->info.offset.x;
+        layout.canvas.point.y += node->info.offset.y;
+    }
+    
     layout.canvas.point.x += node->info.padding;
     layout.canvas.point.y += node->info.padding;
     layout.canvas.size.width = node->info.rect.size.width - node->info.padding;
@@ -223,9 +236,13 @@ void render_piece_tree(draw_ctx *ctx, text_field_info *info, document_node *doc_
     while ((node = bt_tree_next(&traversal))){
         uno_text_piece *piece = (uno_text_piece*)node->data;
         if (piece->buffer_index >= 2) continue;
-        // print("Rendering from buffer %i at %i-%i %i",piece->buffer_index,piece->range.start,piece->range.size,info->piece_tree->data_size);
+        // print("Rendering %x from buffer %i at %r %i",(uptr)piece,piece->buffer_index,piece->range,info->piece_tree->data_size);
         fb_continuous_draw_text(ctx, false, &result->cursor, slice_from_buffer(info->children[piece->buffer_index]), &piece->range, rect, &result->size, scroll, default_format, text_formatting);
         if (ctx->fb) mark_dirty(ctx, rect.point.x, rect.point.y, result->size.width, result->size.height);
+    }
+    
+    for (int i = 0; i < min(info->cursor_count,info->cursor_limit); i++){
+        if (info->cursor_color) fb_fill_rect(ctx, rect.point.x + info->cursors[i] * fb_char_width(default_format.scale), rect.point.y, 3, fb_line_height(default_format.scale), info->cursor_color);
     }
 }
 
