@@ -214,9 +214,9 @@ void uno_paste(void* ctx){
 
 bool mouse_in_node(document_node *node, mouse_data data){
     if (data.position.x < node->info.rect.point.x || 
-        data.position.x > node->info.rect.point.x + node->info.rect.size.width || 
+        data.position.x > node->info.rect.point.x + (i32)node->info.rect.size.width || 
         data.position.y < node->info.rect.point.y || 
-        data.position.y > node->info.rect.point.y + node->info.rect.size.height) return false;
+        data.position.y > node->info.rect.point.y + (i32)node->info.rect.size.height) return false;
     return true;
 }
 

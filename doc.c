@@ -35,7 +35,7 @@ int text_to_scale(doc_text_size type){
         case doc_text_subheading:    return 4;
         case doc_text_footnote:      return 3;
         case doc_text_caption:       return 2;
-        case doc_text_none:          return 0;
+        default:                     return 0;
     }
 }
 
