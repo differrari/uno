@@ -19,9 +19,9 @@ tern uno_text_find_closest(void *ctx, bt_tree * tree, bt_node *node){
     range_t *new_range = ctx;
     uno_text_piece *piece = (uno_text_piece*)node->data;
     size_t old_size = piece->range.size;
-    if (node->key == new_range->start) return 0;
-    if (node->key < new_range->start && node->key + old_size > new_range->start) return 0;
-    if (node->key >= new_range->start + new_range->size) return -1;
+    if (node->key == (i64)new_range->start) return 0;
+    if (node->key < (i64)new_range->start && node->key + old_size > new_range->start) return 0;
+    if (node->key >= (i64)new_range->start + (i64)new_range->size) return -1;
     return 1;
 }
 
@@ -39,7 +39,7 @@ void uno_text_piece_shift_by_until(bt_tree *tree, i64 offset, bt_node *until){
 }
 
 void uno_text_add_piece(text_field_info *info, uno_text_piece piece, i64 cursor_index){
-    if (info->cursor_count < cursor_index) return;
+    if (info->cursor_count < (u64)cursor_index) return;
     
     i64 position = info->cursors[cursor_index];
     range_t new_range = {position,piece.range.size};
@@ -48,7 +48,7 @@ void uno_text_add_piece(text_field_info *info, uno_text_piece piece, i64 cursor_
         uno_text_piece *old_piece = (uno_text_piece*)existing_node->data;
         range_t old_range = old_piece->range;
         // print("Found existing node %i - %r",existing_node->key,old_range);
-        if (existing_node->key < new_range.start && existing_node->key + old_range.size > new_range.start){
+        if (existing_node->key < (i64)new_range.start && existing_node->key + old_range.size > new_range.start){
             // print("Need to split");
             i64 offset = position-existing_node->key;
             uno_text_piece lh = { .buffer_index = old_piece->buffer_index, .range = {.start = old_piece->range.start, .size = offset } };
@@ -70,7 +70,7 @@ void uno_text_add_piece(text_field_info *info, uno_text_piece piece, i64 cursor_
 void uno_text_piece_identity(text_field_info *info){
     bt_reset(info->piece_tree);
     info->total_size = 0;
-    for (int i = 0; i < info->cursor_count; i++)
+    for (u32 i = 0; i < info->cursor_count; i++)
         info->cursors[i] = 0;
     uno_text_add_piece(info,(uno_text_piece){
         .buffer_index = 0,
@@ -181,9 +181,9 @@ void uno_text_field_scroll_node(document_node *node, i32 x_shift, i32 y_shift);
 bool uno_text_field_mouse(document_node *node, mouse_data data, u8 modifier){
     bool res = false;
     if (data.position.x < node->info.rect.point.x || 
-        data.position.x > node->info.rect.point.x + node->info.rect.size.width || 
+        data.position.x > node->info.rect.point.x + (i32)node->info.rect.size.width || 
         data.position.y < node->info.rect.point.y || 
-        data.position.y > node->info.rect.point.y + node->info.rect.size.height) return false;
+        data.position.y > node->info.rect.point.y + (i32)node->info.rect.size.height) return false;
     if (data.raw.scroll){
         if (modifier & KEY_MOD_LSHIFT){
             uno_text_field_scroll_node(node, data.raw.scroll, 0);
@@ -222,7 +222,7 @@ void* uno_text_field_copy(document_node* node, size_t *out_size){
     buffer *content = info->content;
     if (!content || !content->buffer) return false;
     *out_size = info->selection.end-info->selection.start;
-    return &info->content->buffer[info->selection.start];
+    return &((char*)info->content->buffer)[info->selection.start];
 }
 
 bool uno_text_field_paste(document_node* node, void* buf, size_t size){
@@ -303,7 +303,7 @@ void uno_text_field_shift_cursor_node(document_node *node, i32 x_shift, i32 y_sh
         pos_to_lin_col(content->cursor, slice, &lin, &col);
         i32 dis = col + ((info->offset ? info->offset->x : 0)/cw) - (node->info.rect.size.width/cw);
         if (dis >= 0) uno_text_field_scroll_node(node, -dis, 0);
-        else if (-dis > node->info.rect.size.width/cw) uno_text_field_scroll_node(node, -((node->info.rect.size.width/cw)+dis), 0);
+        else if (-dis > (i32)node->info.rect.size.width/cw) uno_text_field_scroll_node(node, -((node->info.rect.size.width/cw)+dis), 0);
     }
     if (y_shift){
         i32 lin, col = 0;
@@ -314,7 +314,7 @@ void uno_text_field_shift_cursor_node(document_node *node, i32 x_shift, i32 y_sh
         content->cursor = lin_col_to_pos(lin, col, slice);
         i32 dis = lin + ((info->offset ? info->offset->y : 0)/lh) - (node->info.rect.size.height/lh);
         if (dis >= 0) uno_text_field_scroll_node(node, 0, -dis);
-        else if (-dis > node->info.rect.size.height/lh) uno_text_field_scroll_node(node, 0, -((node->info.rect.size.height/lh)+dis));
+        else if (-dis > (i32)node->info.rect.size.height/lh) uno_text_field_scroll_node(node, 0, -((node->info.rect.size.height/lh)+dis));
     }
     content->cursor = clamp(content->cursor, 0, content->buffer_size);
 }

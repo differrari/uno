@@ -109,12 +109,11 @@ int main(int argc, char* argv[]){
         linked_list_push(root->children, parse_tag(&s));
     }    
     
-    layout_document((gpu_rect){0,0,ctx.width,ctx.height}, doc);
+    layout_document((gpu_rect){{0,0},{ctx.width,ctx.height}}, doc);
     
     debug_document(doc);
     
     while (!should_close_ctx()){
-        begin_drawing(&ctx);
         
         fb_clear(&ctx, 0xFFFFFFFF);
         
