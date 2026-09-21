@@ -1,5 +1,6 @@
 #include "uno.h"
 #include "data/struct/chunk_array.h"
+#include "doc.h"
 #include "syscalls/syscalls.h"
 #include "input_keycodes.h"
 #include "memory/memory.h"
@@ -131,10 +132,12 @@ void uno_destroy_node(void *ptr){
     release(node);
 }
 
-void uno_set_document_view(void (*view_builder)(), gpu_rect canvas){
+document_data uno_set_document_view(void (*view_builder)(), gpu_rect canvas){
     view_build_func = view_builder;
     default_canvas = canvas;
+    default_doc_data.scroll_tag = -1;
     uno_refresh();
+    return default_doc_data;
 }
 
 bool uno_doc_dirty = false;
@@ -160,7 +163,8 @@ void uno_refresh(){
 }
 
 void uno_refresh_layout(){
-    layout_document(default_canvas, default_doc_data);
+    default_doc_data.needs_layout = true;
+    layout_document(default_canvas, &default_doc_data);
 }
 
 bool uno_draw(draw_ctx *ctx){
@@ -172,7 +176,7 @@ bool uno_draw(draw_ctx *ctx){
 
 document_node* uno_find_node(document_node *node, int tag){
     if (!tag || !node) return 0;
-    if (node->input.tag == tag){
+    if (node->info.tag == tag){
         return node;
     }
     else if (node->children){
@@ -226,8 +230,8 @@ bool uno_button_click(document_node *node, mouse_data data, u8 modifier){
     button_info *info = node->ctx;
     if (!info) return false;
     if (mouse_button_down(&data, LMB)){
-        if (info->press) info->press(node->input.tag, data.position);
-    } else if (info->hover) info->hover(node->input.tag, data.position);//TODO: for hover to work, we need to disable click-only in uno_dispatch_mouse, which can get costly
+        if (info->press) info->press(node->info.tag, data.position);
+    } else if (info->hover) info->hover(node->info.tag, data.position);//TODO: for hover to work, we need to disable click-only in uno_dispatch_mouse, which can get costly
         
     return true;
 }
@@ -239,7 +243,7 @@ void uno_button(int tag, node_info info, button_info *b_info, string_slice label
     if (!((info.fg_color >> 24) & 0xFF)) info.fg_color |= 0xFF << 24;
     document_node *node = uno_create_view(info, label);
     node->input.mouse_input = uno_button_click;
-    node->input.tag = tag;
+    node->info.tag = tag;
     node->ctx = b_info;
     node->content = label;
 }
@@ -295,4 +299,9 @@ bool uno_dispatch_mouse(mouse_data mouse, u8 modifier){
         return focused_node->input.mouse_input(focused_node,mouse, modifier);
     
     return false;
+}
+
+void uno_scroll_to(int tag){
+    default_doc_data.scroll_tag = tag;
+    uno_refresh();
 }

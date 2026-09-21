@@ -253,7 +253,7 @@ document_node* uno_text_field(int tag, node_info info, text_field_info *text_inf
     node->input.mouse_input = uno_text_field_mouse;
     node->input.on_copy = uno_text_field_copy;
     node->input.on_paste = uno_text_field_paste;
-    node->input.tag = tag;
+    node->info.tag = tag;
     
     node->ctx = text_info;
 

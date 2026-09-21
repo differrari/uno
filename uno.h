@@ -70,8 +70,9 @@ void uno_button(int tag, node_info info, button_info *b_info, string_slice label
 
 void uno_label(node_info info, doc_text_size size, string_slice content);
 
-void uno_set_document_view(void (*view_builder)(), gpu_rect canvas);
+document_data uno_set_document_view(void (*view_builder)(), gpu_rect canvas);
 document_data get_current_document_view();
+void uno_scroll_to(int tag);
 void uno_refresh();
 void uno_refresh_layout();
 

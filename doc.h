@@ -32,6 +32,9 @@ typedef enum {
 } size_rule;
 
 typedef struct {
+    
+    int tag;
+    
     int type;
     doc_gen_type general_type;
     
@@ -60,26 +63,27 @@ typedef struct {
 typedef struct document_node document_node;
 
 typedef struct {
-    int tag;
     bool (*keyboard_input)(document_node* node,kbd_event event, u8 modifier);
     bool (*mouse_input)(document_node*,mouse_data, u8 modifier);
     void* (*on_copy)(document_node*,size_t *out_size);
     bool (*on_paste)(document_node*,void* buf, size_t data);
 } uno_input_info;
 
-typedef struct document_node {
+struct document_node {
     node_info info;
     linked_list_t *children;
     string_slice content;
     uno_input_info input;
     void *ctx;
-} document_node;
+};
 
 typedef struct {
     document_node *root;
+    int scroll_tag;
+    bool needs_layout;
 } document_data;
 
-void layout_document(gpu_rect canvas, document_data doc);
+void layout_document(gpu_rect canvas, document_data *doc);
 void render_document(draw_ctx *ctx, document_data doc);
 void debug_document(document_data doc);
 

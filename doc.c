@@ -58,9 +58,15 @@ static inline float layout_get_size(doc_layout_types direction, gpu_rect rect){
 
 static inline float layout_get_offset(doc_layout_types direction, gpu_point *point){
     if (!point) return 0;
-    if (direction == doc_layout_horizontal) return -point->x;
+    if (direction == doc_layout_horizontal) return point->x;
     if (direction == doc_layout_vertical || direction == doc_layout_depth) return point->y;
     return 0;
+}
+
+static inline void layout_set_offset(doc_layout_types direction, document_node *node, gpu_point point){
+    if (!node || !node->info.offset) return;
+    if (direction == doc_layout_horizontal) node->info.offset->x += -point.x;
+    else if (direction == doc_layout_vertical || direction == doc_layout_depth) node->info.offset->y += -max(point.y,0);
 }
 
 static inline void layout_set_size(doc_layout_types direction, doc_layout *layout, float size){
@@ -87,7 +93,7 @@ void layout_update_parent_with_child(doc_layout *layout, document_node *node, do
     }
 }
 
-doc_layout_result layout_doc_node(doc_layout layout, document_data doc, document_node *node){
+doc_layout_result layout_doc_node(doc_layout layout, document_data *doc, document_node *node){
     doc_layout_result result = {};
     if (!node) return result;
     
@@ -109,7 +115,7 @@ doc_layout_result layout_doc_node(doc_layout layout, document_data doc, document
         int remaining_children = 0;
         for (linked_list_node_t *n = node->children->head; n; n = n->next){
             if (!n->data) break;
-            if (remaining_size <= 0) break;
+            if (remaining_size <= 0 && !node->info.offset) break;
             document_node *child = n->data;
             if (child->info.sizing_rule != size_fill){
                 doc_layout new_layout = layout;
@@ -117,7 +123,7 @@ doc_layout_result layout_doc_node(doc_layout layout, document_data doc, document
                 if (child->info.sizing_rule == size_relative){
                     if (child->info.percentage < 0 || child->info.percentage > 1) continue;
                     allocd_size = floor(total_size*child->info.percentage);
-                    if (remaining_size < allocd_size) allocd_size = remaining_size;
+                    if (remaining_size < allocd_size && !node->info.offset) allocd_size = remaining_size;
                     layout_set_size(layout.direction, &new_layout, allocd_size);
                     remaining_size -= allocd_size;
                     doc_layout_result layout_result = layout_doc_node(new_layout, doc, child);
@@ -135,7 +141,7 @@ doc_layout_result layout_doc_node(doc_layout layout, document_data doc, document
         }
         for (linked_list_node_t *n = node->children->head; n; n = n->next){
             if (!n->data) break;
-            if (remaining_size <= 0) break;
+            if (remaining_size <= 0 && !node->info.offset) break;
             document_node *child = n->data;
             if (child->info.sizing_rule != size_fill) continue;
             doc_layout new_layout = layout;
@@ -162,27 +168,31 @@ doc_layout_result layout_doc_node(doc_layout layout, document_data doc, document
     return result;
 }
 
-void layout_doc_node_pos(doc_layout layout, document_node *node){
+void layout_doc_node_pos(document_data *doc, doc_layout layout, document_node *node){
     if (!node) return;
     
     if (node->info.sizing_rule != size_fill && !node->info.use_absolute_position){
         switch (node->info.horiz_alignment) {
         case leading:
-            node->info.rect.point.x = layout.canvas.point.x; break;
+            node->info.rect.point.x = layout.canvas.point.x; 
+            break;
         case horizontal_center:
-            node->info.rect.point.x = layout.canvas.point.x + (layout.canvas.size.width-node->info.rect.size.width)/2.f; break;
+            node->info.rect.point.x = layout.canvas.point.x + (layout.canvas.size.width-node->info.rect.size.width)/2.f; 
+            break;
         case trailing:
-            node->info.rect.point.x = layout.canvas.point.x + (layout.canvas.size.width-node->info.rect.size.width); break;
-          break;
+            node->info.rect.point.x = layout.canvas.point.x + (layout.canvas.size.width-node->info.rect.size.width); 
+            break;
         }
         switch (node->info.vert_alignment) {
         case top:
-            node->info.rect.point.y = layout.canvas.point.y; break;
+            node->info.rect.point.y = layout.canvas.point.y;
+            break;
         case vertical_center:
-            node->info.rect.point.y = layout.canvas.point.y + (layout.canvas.size.height-node->info.rect.size.height)/2.f; break;
+            node->info.rect.point.y = layout.canvas.point.y + (layout.canvas.size.height-node->info.rect.size.height)/2.f;
+            break;
         case bottom:
-            node->info.rect.point.y = layout.canvas.point.y + (layout.canvas.size.height-node->info.rect.size.height); break;
-          break;
+            node->info.rect.point.y = layout.canvas.point.y + (layout.canvas.size.height-node->info.rect.size.height); 
+            break;
         }
     } else if (node->info.use_absolute_position){
         node->info.rect.point.x += layout.canvas.point.x;
@@ -207,7 +217,12 @@ void layout_doc_node_pos(doc_layout layout, document_node *node){
         for (linked_list_node_t *n = node->children->head; n; n = n->next){
             if (!n->data) continue;
             document_node *child = n->data;
-            layout_doc_node_pos(layout, child);
+            layout_doc_node_pos(doc, layout, child);
+            if (doc->scroll_tag >= 0 && child->info.tag == doc->scroll_tag && node->info.offset){
+                layout_set_offset(layout.direction, node, child->info.rect.point);
+                doc->scroll_tag = -1;
+                doc->needs_layout = true;
+            }
             if (child->info.sizing_rule != size_absolute && layout.direction != doc_layout_depth){
                 if (layout.direction == doc_layout_horizontal)
                     layout.canvas.point.x += child->info.rect.size.width;
@@ -217,10 +232,14 @@ void layout_doc_node_pos(doc_layout layout, document_node *node){
         }
 }
 
-void layout_document(gpu_rect canvas, document_data doc){
+void layout_document(gpu_rect canvas, document_data *doc){
+    if (!doc || !doc->needs_layout) return;
+    doc->needs_layout = false;
     doc_layout layout = (doc_layout){.canvas = canvas};
-    layout_doc_node(layout, doc, doc.root);
-    layout_doc_node_pos(layout, doc.root);
+    layout_doc_node(layout, doc, doc->root);
+    layout_doc_node_pos(doc, layout, doc->root);
+    if (doc->needs_layout)
+        layout_document(canvas, doc);
 }
 
 void render_text_section(draw_ctx *ctx, range_t string_range, string_slice slice, gpu_rect rect, gpu_point scroll, text_draw_result *result, text_format default_format, text_format_arr text_formatting){
@@ -247,15 +266,19 @@ void render_piece_tree(draw_ctx *ctx, text_field_info *info, document_node *doc_
     }
 }
 
-void render_doc_node(draw_ctx *ctx, document_node *node){
+void render_doc_node(draw_ctx *ctx, document_node *node, gpu_point offset){
     if (!node) return;
+    if (node->info.offset){
+        offset.x += node->info.offset->x;
+        offset.y += node->info.offset->y;
+    }
     if (node->info.bg_color){
-        fb_fill_rect(ctx, node->info.rect.point.x + node->info.padding, node->info.rect.point.y + node->info.padding, node->info.rect.size.width - (node->info.padding*2), node->info.rect.size.height - (node->info.padding*2), node->info.bg_color);
+        fb_fill_rect(ctx, node->info.rect.point.x + node->info.padding + offset.x, node->info.rect.point.y + node->info.padding + offset.y, node->info.rect.size.width - (node->info.padding*2), node->info.rect.size.height - (node->info.padding*2), node->info.bg_color);
     }
     if (node->children)
         for (linked_list_node_t *n = node->children->head; n; n = n->next){
             if (!n->data) break;
-            render_doc_node(ctx,n->data);
+            render_doc_node(ctx,n->data,offset);
         }
     if (node->content.length){
         int text_size = text_to_scale(node->info.type);
@@ -296,7 +319,7 @@ void render_doc_node(draw_ctx *ctx, document_node *node){
 }
 
 void render_document(draw_ctx *ctx, document_data doc){
-    render_doc_node(ctx, doc.root);
+    render_doc_node(ctx, doc.root, (gpu_point){});
 }
 
 #include "utils/indent.h"
