@@ -151,6 +151,12 @@ document_data get_current_document_view(){
     return default_doc_data;
 }
 
+color clear_color;
+
+void uno_clear_color(color col){
+    clear_color = col;
+}
+
 void uno_refresh(){
     chunk_array_reset(node_stack);
     uno_destroy_node(default_doc_data.root);
@@ -170,6 +176,7 @@ void uno_refresh_layout(){
 bool uno_draw(draw_ctx *ctx){
     if (!uno_doc_dirty && !uno_always_redraw) return false;
     uno_doc_dirty = false;
+    fb_clear(ctx, clear_color);
     render_document(ctx, default_doc_data);
     return true;
 }
