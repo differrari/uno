@@ -78,11 +78,15 @@ void uno_refresh_layout();
 
 bool uno_draw(draw_ctx *ctx);
 
+void uno_clear_color(color col);
+
 void uno_focus(int tag);
 bool uno_dispatch_kbd(kbd_event ev, u8 modifier);
 bool uno_dispatch_mouse(mouse_data mouse, u8 modifier);
 void uno_copy(void*);
 void uno_paste(void*);
+
+void uno_redraw_always();
 
 #define VERTICAL(info, children) uno_begin_vertical((info)); children; uno_end_vertical();
 #define HORIZONTAL(info, children) uno_begin_horizontal((info)); children; uno_end_horizontal();
