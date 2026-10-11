@@ -1,3 +1,4 @@
+#!/usr/bin/sbcl --script
 (load "~/redbuild/v3/redbuild.lisp")
 
 ; (redbuild:set-tester "ui.c")
