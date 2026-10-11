@@ -48,7 +48,7 @@ void uno_text_add_piece(text_field_info *info, uno_text_piece piece, i64 cursor_
         uno_text_piece *old_piece = (uno_text_piece*)existing_node->data;
         range_t old_range = old_piece->range;
         // print("Found existing node %i - %r",existing_node->key,old_range);
-        if (existing_node->key < (i64)new_range.start && existing_node->key + old_range.size > new_range.start){
+        if (existing_node->key < (i64)new_range.start && existing_node->key + (u64)old_range.size > (u64)new_range.start){
             // print("Need to split");
             i64 offset = position-existing_node->key;
             uno_text_piece lh = { .buffer_index = old_piece->buffer_index, .range = {.start = old_piece->range.start, .size = offset } };
