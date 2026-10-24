@@ -185,8 +185,8 @@ bool uno_text_field_input(document_node *node, kbd_event event, u8 modifier){
                 buffer_delete(content, info->selection.end, info->selection.end-info->selection.start);
             info->selection.start = 0;
             info->selection.end = 0;
-        } else if (info->cursors[0]){
-            if (info->piece_tree && info->gap){
+        } else {
+            if (info->cursors && info->cursors[0] && info->piece_tree && info->gap){
                 uno_text_remove_from_piece(info, (range_t){info->cursors[0]-1, 1});
                 info->cursors[0] -= 1;
             } else 
