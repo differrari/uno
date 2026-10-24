@@ -247,6 +247,9 @@ void render_text_section(draw_ctx *ctx, range_t string_range, string_slice slice
     if (ctx->fb) mark_dirty(ctx, rect.point.x, rect.point.y, result->size.width, result->size.height);
 }
 
+extern void pos_to_lin_col_tree(u32 pos, bt_tree *tree, text_field_info *info, i32 *lin, i32 *col);
+extern u32 lin_col_to_pos_tree(i32 line, i32 col, text_field_info *info, bt_tree *tree);
+
 void render_piece_tree(draw_ctx *ctx, text_field_info *info, document_node *doc_node, gpu_rect rect, gpu_point scroll, text_draw_result *result, text_format default_format, text_format_arr text_formatting){
     bt_tree_traversal traversal = {
         .tree = info->piece_tree
@@ -261,9 +264,12 @@ void render_piece_tree(draw_ctx *ctx, text_field_info *info, document_node *doc_
         if (ctx->fb) mark_dirty(ctx, rect.point.x, rect.point.y, result->size.width, result->size.height);
     }
     
-    for (int i = 0; i < min(info->cursor_count,info->cursor_limit); i++){
-        if (info->cursor_color) fb_fill_rect(ctx, rect.point.x + info->cursors[i] * fb_char_width(default_format.scale), rect.point.y, 3, fb_line_height(default_format.scale), info->cursor_color);
-    }
+    if (info->cursor_color)
+        for (int i = 0; i < min(info->cursor_count,info->cursor_limit); i++){
+            int lin = 0, col = 0;
+            pos_to_lin_col_tree(info->cursors[i], info->piece_tree, info, &lin, &col);
+            fb_fill_rect(ctx, rect.point.x + col * fb_char_width(default_format.scale), rect.point.y + lin * fb_line_height(default_format.scale), 3, fb_line_height(default_format.scale), info->cursor_color);
+        }
 }
 
 void render_doc_node(draw_ctx *ctx, document_node *node, gpu_point offset){

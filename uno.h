@@ -25,8 +25,9 @@ typedef struct {
 } select_range;
 
 typedef struct {
-    int buffer_index;
+    i32 buffer_index;
     range_t range;
+    i32 nl_count;
 } uno_text_piece;
 
 typedef struct {

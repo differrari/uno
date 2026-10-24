@@ -6,7 +6,8 @@
 #include "math/math.h"
 #include "input_keycodes.h"
 #include "draw/textdraw.h"
-#include "syscalls/syscalls.h"
+
+extern int print(char* fmt,...);
 
 void uno_text_field_shift_cursor_node(document_node *node, i32 x_shift, i32 y_shift);
 extern document_node* uno_find_node(document_node *node, int tag);
@@ -38,6 +39,13 @@ void uno_text_piece_shift_by_until(bt_tree *tree, i64 offset, bt_node *until){
     }
 }
 
+i32 count_newlines(string_slice sl){
+    i32 count = 0;
+    for (int i = 0; i < sl.length; i++)
+        if (sl.data[i] == '\n') count++;
+    return count;
+}
+
 void uno_text_add_piece(text_field_info *info, uno_text_piece piece, i64 cursor_index){
     if (info->cursor_count < (u64)cursor_index) return;
     
@@ -52,7 +60,11 @@ void uno_text_add_piece(text_field_info *info, uno_text_piece piece, i64 cursor_
             // print("Need to split");
             i64 offset = position-existing_node->key;
             uno_text_piece lh = { .buffer_index = old_piece->buffer_index, .range = {.start = old_piece->range.start, .size = offset } };
+            string_slice lhs = {info->children[old_piece->buffer_index]->buffer + old_piece->range.start, offset};
+            lh.nl_count = count_newlines(lhs);
             uno_text_piece rh = { .buffer_index = old_piece->buffer_index, .range = {.start = old_piece->range.start + offset, .size = old_piece->range.size - offset } };
+            string_slice rhs = {info->children[old_piece->buffer_index]->buffer + old_piece->range.start + offset, old_piece->range.size - offset};
+            rh.nl_count = count_newlines(rhs);
             //delete the node off the tree, save its key and piece
             bt_tree_insert(info->piece_tree, &lh, existing_node->key);
             bt_node *new_bound = bt_tree_insert(info->piece_tree, &rh, existing_node->key + offset);
@@ -163,7 +175,8 @@ bool uno_text_field_input(document_node *node, kbd_event event, u8 modifier){
             if (buffer_write_lim(info->gap, &c, 1)){
                 uno_text_add_piece(info,(uno_text_piece){
                     .buffer_index = 1,
-                    .range = {info->gap->cursor-1,1}
+                    .range = {info->gap->cursor-1,1},
+                    .nl_count = c == '\n'
                 }, 0);
             }
         } else {
@@ -288,6 +301,59 @@ void uno_text_field_scroll(int tag, i32 x_shift, i32 y_shift){
     uno_text_field_scroll_node(node, x_shift, y_shift);
 }
 
+void pos_to_lin_col_tree(u32 pos, bt_tree *tree, text_field_info *info, i32 *lin, i32 *col){
+    if (!lin && !col) return;
+    bt_tree_traversal traverse = {
+        .tree = tree
+    };
+    *lin = 0; *col = 0;
+    i32 count = 0;
+    while (bt_tree_next(&traverse)){
+        uno_text_piece *piece = (uno_text_piece*)traverse.current->data;
+        if (count + piece->range.size >= pos){
+            string_slice sl = {info->children[piece->buffer_index]->buffer + piece->range.start, pos - count};
+            *lin += count_newlines(sl);
+            *col += pos - count;
+            return;
+        }
+        count += piece->range.size;
+        *lin += piece->nl_count;
+        string_slice sl = {info->children[piece->buffer_index]->buffer + piece->range.start, piece->range.size};
+        if (piece->nl_count){
+            for (int n = 0; n < piece->nl_count; n++){
+                sl = slice_seek_to(sl, '\n');
+            }
+            *col = (i32)sl.length;
+        } else *col += piece->range.size;
+    }
+}
+
+u32 lin_col_to_pos_tree(i32 line, i32 col, text_field_info *info, bt_tree *tree){
+    bt_tree_traversal traverse = {
+        .tree = tree
+    };
+    i32 cline = 0, ccol = 0;
+    i32 count = 0;
+    while (bt_tree_next(&traverse)){
+        uno_text_piece *piece = (uno_text_piece*)traverse.current->data;
+        if (cline + piece->nl_count < line){
+            cline += piece->nl_count;
+        } else {
+            if (cline + piece->nl_count == line){
+                if (piece->range.size - piece->nl_count < col){
+                    print("Foujnd in piece %i",traverse.index);
+                    return count + col;
+                }
+            } else {
+                string_slice sl = {info->children[piece->buffer_index]->buffer + piece->range.start, piece->range.size};
+                return count + lin_col_to_pos(line - cline, col, sl);
+            }
+        }
+        count += piece->range.size;
+    }
+    return count;
+}
+
 void uno_text_field_shift_cursor_node(document_node *node, i32 x_shift, i32 y_shift){
     text_field_info *info = node->ctx;
     if (!info) return;
@@ -295,28 +361,68 @@ void uno_text_field_shift_cursor_node(document_node *node, i32 x_shift, i32 y_sh
     if (!content || !content->buffer) return;
     u8 cw = fb_line_height(text_to_scale(node->info.type));
     u8 lh = fb_line_height(text_to_scale(node->info.type));
-    if (x_shift){
-        if ((i64)content->cursor + x_shift < 0) content->cursor = 0;
-        else content->cursor += x_shift;
-        i32 lin, col = 0;
-        string_slice slice = (string_slice){content->buffer,content->buffer_size};
-        pos_to_lin_col(content->cursor, slice, &lin, &col);
-        i32 dis = col + ((info->offset ? info->offset->x : 0)/cw) - (node->info.rect.size.width/cw);
-        if (dis >= 0) uno_text_field_scroll_node(node, -dis, 0);
-        else if (-dis > (i32)node->info.rect.size.width/cw) uno_text_field_scroll_node(node, -((node->info.rect.size.width/cw)+dis), 0);
+    if (info->piece_tree){
+        //TODO: The logic for this can be improved by only calculating through the delta, not the full file
+        for (int i = info->cursor_count-1; i >= 0; i--){
+            if (x_shift){
+                if ((i64)info->cursors[i] + x_shift < 0) info->cursors[i] = 0;
+                else info->cursors[i] += x_shift;
+                i32 lin, col = 0;
+                if (info->piece_tree){
+                    pos_to_lin_col_tree(info->cursors[i], info->piece_tree, info, &lin, &col);
+                } else {
+                    string_slice slice = (string_slice){content->buffer,content->buffer_size};
+                    pos_to_lin_col(info->cursors[i], slice, &lin, &col);
+                }
+                i32 dis = col + ((info->offset ? info->offset->x : 0)/cw) - (node->info.rect.size.width/cw);
+                if (dis >= 0) uno_text_field_scroll_node(node, -dis, 0);
+                else if (-dis > (i32)node->info.rect.size.width/cw) uno_text_field_scroll_node(node, -((node->info.rect.size.width/cw)+dis), 0);
+            }
+            if (y_shift){
+                i32 lin, col = 0;
+                if (info->piece_tree){
+                    pos_to_lin_col_tree(info->cursors[i], info->piece_tree, info, &lin, &col);
+                    // print("Start at %i,%i",lin,col);
+                    if (lin + y_shift < 0) lin = 0;
+                    else lin += y_shift;
+                    info->cursors[i] = lin_col_to_pos_tree(lin, col, info, info->piece_tree);
+                    // print("Lin %i Col %i",lin,col);
+                } else {
+                    string_slice slice = (string_slice){content->buffer,content->buffer_size};
+                    pos_to_lin_col(info->cursors[i], slice, &lin, &col);
+                    if (lin + y_shift < 0) lin = 0;
+                    else lin += y_shift;
+                    info->cursors[i] = lin_col_to_pos(lin, col, slice);
+                }
+                i32 dis = lin + ((info->offset ? info->offset->y : 0)/lh) - (node->info.rect.size.height/lh);
+                if (dis >= 0) uno_text_field_scroll_node(node, 0, -dis);
+                else if (-dis > (i32)node->info.rect.size.height/lh) uno_text_field_scroll_node(node, 0, -((node->info.rect.size.height/lh)+dis));
+            }
+        }
+        content->cursor = clamp(content->cursor, 0, content->buffer_size);
+    } else {
+        if (x_shift){
+            if ((i64)content->cursor + x_shift < 0) content->cursor = 0;
+            else content->cursor += x_shift;
+            i32 lin, col = 0;
+            string_slice slice = (string_slice){content->buffer,content->buffer_size};
+            pos_to_lin_col(content->cursor, slice, &lin, &col);
+            i32 dis = col + ((info->offset ? info->offset->x : 0)/cw) - (node->info.rect.size.width/cw);
+            if (dis >= 0) uno_text_field_scroll_node(node, -dis, 0);
+            else if (-dis > (i32)node->info.rect.size.width/cw) uno_text_field_scroll_node(node, -((node->info.rect.size.width/cw)+dis), 0);
+        }
+        if (y_shift){
+            i32 lin, col = 0;
+            string_slice slice = (string_slice){content->buffer,content->buffer_size};
+            pos_to_lin_col(content->cursor, slice, &lin, &col);
+            if (lin + y_shift < 0) lin = 0;
+            else lin += y_shift;
+            content->cursor = lin_col_to_pos(lin, col, slice);
+            i32 dis = lin + ((info->offset ? info->offset->y : 0)/lh) - (node->info.rect.size.height/lh);
+            if (dis >= 0) uno_text_field_scroll_node(node, 0, -dis);
+            else if (-dis > (i32)node->info.rect.size.height/lh) uno_text_field_scroll_node(node, 0, -((node->info.rect.size.height/lh)+dis));
+        }
     }
-    if (y_shift){
-        i32 lin, col = 0;
-        string_slice slice = (string_slice){content->buffer,content->buffer_size};
-        pos_to_lin_col(content->cursor, slice, &lin, &col);
-        if (lin + y_shift < 0) lin = 0;
-        else lin += y_shift;
-        content->cursor = lin_col_to_pos(lin, col, slice);
-        i32 dis = lin + ((info->offset ? info->offset->y : 0)/lh) - (node->info.rect.size.height/lh);
-        if (dis >= 0) uno_text_field_scroll_node(node, 0, -dis);
-        else if (-dis > (i32)node->info.rect.size.height/lh) uno_text_field_scroll_node(node, 0, -((node->info.rect.size.height/lh)+dis));
-    }
-    content->cursor = clamp(content->cursor, 0, content->buffer_size);
 }
 
 void uno_text_field_shift_cursor(int tag, i32 x_shift, i32 y_shift){
