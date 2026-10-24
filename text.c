@@ -28,6 +28,75 @@ tern uno_text_find_closest(void *ctx, bt_tree * tree, bt_node *node){
     return 1;
 }
 
+i32 count_chars(string_slice sl, char c){
+    i32 count = 0;
+    for (int i = 0; i < sl.length; i++)
+        if (sl.data[i] == c) count++;
+    return count;
+}
+
+void pos_to_lin_col_tree(u32 pos, bt_tree *tree, text_field_info *info, i32 *lin, i32 *col){
+    if (!lin && !col) return;
+    bt_tree_traversal traverse = {
+        .tree = tree
+    };
+    *lin = 0; *col = 0;
+    i32 count = 0;
+    while (bt_tree_next(&traverse)){
+        uno_text_piece *piece = (uno_text_piece*)traverse.current->data;
+        if (count + piece->range.size >= pos){
+            string_slice sl = {info->children[piece->buffer_index]->buffer + piece->range.start, pos - count};
+            i32 nl_count = count_chars(sl,'\n');
+            i32 tab_count = count_chars(sl, '\t');
+            *lin += nl_count;
+            if (nl_count){
+                for (int i = 0; i < nl_count; i++)
+                    sl = slice_seek_to(sl, '\n');
+                tab_count = count_chars(sl, '\t');
+                *col = sl.length + (tab_count*SPACES_PER_TAB);
+            } else 
+                *col += (pos - count) + (tab_count*SPACES_PER_TAB);
+            return;
+        }
+        count += piece->range.size;
+        *lin += piece->nl_count;
+        string_slice sl = {info->children[piece->buffer_index]->buffer + piece->range.start, piece->range.size};
+        if (piece->nl_count){
+            for (int n = 0; n < piece->nl_count; n++){
+                sl = slice_seek_to(sl, '\n');
+            }
+            i32 tab_count = count_chars(sl, '\t');
+            *col = (i32)sl.length + (tab_count * SPACES_PER_TAB);
+        } else *col += piece->range.size + (piece->tab_count*SPACES_PER_TAB);
+    }
+}
+
+u32 lin_col_to_pos_tree(i32 line, i32 col, text_field_info *info, bt_tree *tree){
+    bt_tree_traversal traverse = {
+        .tree = tree
+    };
+    i32 cline = 0, ccol = 0;
+    i32 count = 0;
+    while (bt_tree_next(&traverse)){
+        uno_text_piece *piece = (uno_text_piece*)traverse.current->data;
+        if (cline + piece->nl_count < line){
+            cline += piece->nl_count;
+        } else {
+            if (cline + piece->nl_count == line){
+                if (piece->range.size - piece->nl_count < col){
+                    print("Foujnd in piece %i",traverse.index);
+                    return count + col;
+                }
+            } else {
+                string_slice sl = {info->children[piece->buffer_index]->buffer + piece->range.start, piece->range.size};
+                return count + lin_col_to_pos(line - cline, col, sl);
+            }
+        }
+        count += piece->range.size;
+    }
+    return count;
+}
+
 void uno_text_piece_shift_by_until(bt_tree *tree, i64 offset, bt_node *until){
     bt_tree_traversal traversal = {
         .tree = tree,
@@ -39,13 +108,6 @@ void uno_text_piece_shift_by_until(bt_tree *tree, i64 offset, bt_node *until){
         node->key += offset;
         if (node == until) break;
     }
-}
-
-i32 count_chars(string_slice sl, char c){
-    i32 count = 0;
-    for (int i = 0; i < sl.length; i++)
-        if (sl.data[i] == c) count++;
-    return count;
 }
 
 void uno_text_remove_from_piece(text_field_info *info, range_t range){
@@ -273,12 +335,22 @@ bool uno_text_field_mouse(document_node *node, mouse_data data, u8 modifier){
     i32 x = (data.position.x-(node->info.offset ? node->info.offset->x : 0))/fb_get_char_size(text_to_scale(node->info.type));
     i32 y = (data.position.y-(node->info.offset ? node->info.offset->y : 0))/(fb_line_height(text_to_scale(node->info.type)));//TODO: line padding should be customizable
  
-    u32 selection = lin_col_to_pos(y, x, (string_slice){content->buffer,content->buffer_size});
+    i32 selection = -1;
+    if (info->piece_tree){
+        selection = lin_col_to_pos_tree(y, x, info, info->piece_tree);
+    }
+    selection = lin_col_to_pos(y, x, (string_slice){content->buffer,content->buffer_size}); 
+    
+    if (selection < 0) return true;
     
     if (modifier & KEY_MOD_LSHIFT){
         info->selection.start = min(content->cursor,selection);
         info->selection.end   = max(content->cursor,selection);
     } else {
+        text_format fmt = get_current_format(selection, (text_format){}, node->info.text_formatting);
+        if (fmt.link.length && info->link_manager){
+            info->link_manager(info->ctx, slice_from_string(fmt.link));
+        }
         info->selection.start = 0;
         info->selection.end = 0;
     }
@@ -357,68 +429,6 @@ void uno_text_field_scroll(int tag, i32 x_shift, i32 y_shift){
     if (!node) return;
     if (node->info.general_type != doc_gen_text) return;
     uno_text_field_scroll_node(node, x_shift, y_shift);
-}
-
-void pos_to_lin_col_tree(u32 pos, bt_tree *tree, text_field_info *info, i32 *lin, i32 *col){
-    if (!lin && !col) return;
-    bt_tree_traversal traverse = {
-        .tree = tree
-    };
-    *lin = 0; *col = 0;
-    i32 count = 0;
-    while (bt_tree_next(&traverse)){
-        uno_text_piece *piece = (uno_text_piece*)traverse.current->data;
-        if (count + piece->range.size >= pos){
-            string_slice sl = {info->children[piece->buffer_index]->buffer + piece->range.start, pos - count};
-            i32 nl_count = count_chars(sl,'\n');
-            i32 tab_count = count_chars(sl, '\t');
-            *lin += nl_count;
-            if (nl_count){
-                for (int i = 0; i < nl_count; i++)
-                    sl = slice_seek_to(sl, '\n');
-                tab_count = count_chars(sl, '\t');
-                *col = sl.length + (tab_count*SPACES_PER_TAB);
-            } else 
-                *col += (pos - count) + (tab_count*SPACES_PER_TAB);
-            return;
-        }
-        count += piece->range.size;
-        *lin += piece->nl_count;
-        string_slice sl = {info->children[piece->buffer_index]->buffer + piece->range.start, piece->range.size};
-        if (piece->nl_count){
-            for (int n = 0; n < piece->nl_count; n++){
-                sl = slice_seek_to(sl, '\n');
-            }
-            i32 tab_count = count_chars(sl, '\t');
-            *col = (i32)sl.length + (tab_count * SPACES_PER_TAB);
-        } else *col += piece->range.size + (piece->tab_count*SPACES_PER_TAB);
-    }
-}
-
-u32 lin_col_to_pos_tree(i32 line, i32 col, text_field_info *info, bt_tree *tree){
-    bt_tree_traversal traverse = {
-        .tree = tree
-    };
-    i32 cline = 0, ccol = 0;
-    i32 count = 0;
-    while (bt_tree_next(&traverse)){
-        uno_text_piece *piece = (uno_text_piece*)traverse.current->data;
-        if (cline + piece->nl_count < line){
-            cline += piece->nl_count;
-        } else {
-            if (cline + piece->nl_count == line){
-                if (piece->range.size - piece->nl_count < col){
-                    print("Foujnd in piece %i",traverse.index);
-                    return count + col;
-                }
-            } else {
-                string_slice sl = {info->children[piece->buffer_index]->buffer + piece->range.start, piece->range.size};
-                return count + lin_col_to_pos(line - cline, col, sl);
-            }
-        }
-        count += piece->range.size;
-    }
-    return count;
 }
 
 void uno_text_field_shift_cursor_node(document_node *node, i32 x_shift, i32 y_shift){

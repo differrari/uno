@@ -51,6 +51,10 @@ typedef struct {
     size_t cursor_limit;
     uptr *cursors;
     
+    bool (*link_manager)(void *ctx, string_slice url);
+    
+    void *ctx;
+    
 } text_field_info;
 
 bt_tree uno_text_make_piece_tree();
