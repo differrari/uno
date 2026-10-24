@@ -308,6 +308,16 @@ bool uno_dispatch_mouse(mouse_data mouse, u8 modifier){
     return false;
 }
 
+font_hdr *uno_font; 
+float uno_line_spacing;
+float uno_character_spacing;
+
+void uno_default_font(font_hdr *hdr, float line_spacing, float character_spacing){
+    uno_font = hdr;
+    uno_line_spacing = line_spacing;
+    uno_character_spacing = character_spacing;
+}
+
 void uno_scroll_to(int tag){
     default_doc_data.scroll_tag = tag;
     uno_refresh();

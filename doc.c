@@ -7,6 +7,10 @@
 #include "uno.h"
 #include "data/struct/bt_tree.h"
 
+extern font_hdr *uno_font; 
+extern float uno_line_spacing;
+extern float uno_character_spacing;
+
 typedef struct {
     gpu_rect canvas;
     doc_layout_types direction;
@@ -19,9 +23,9 @@ typedef struct {
 #define draw_text(ctx, rect) ({\
 text_draw_result _r = {};\
 if (node->info.text_formatting.array_type != fmt_array_none){\
-    _r = fb_draw_text(ctx, node->content, rect, (node->info.offset ? *node->info.offset : (gpu_point){}), (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);\
+    _r = fb_draw_text(ctx, node->content, rect, (node->info.offset ? *node->info.offset : (gpu_point){}), (text_format){ .font = uno_font, .line_spacing = uno_line_spacing, .character_spacing = uno_character_spacing, .scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);\
 } else {\
-    _r = fb_draw_single_text(ctx, node->content, rect, (node->info.offset ? *node->info.offset : (gpu_point){}),  (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy });\
+    _r = fb_draw_single_text(ctx, node->content, rect, (node->info.offset ? *node->info.offset : (gpu_point){}),  (text_format){ .font = uno_font, .line_spacing = uno_line_spacing, .character_spacing = uno_character_spacing, .scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy });\
 }\
 _r;\
 });
@@ -310,14 +314,15 @@ void render_doc_node(draw_ctx *ctx, document_node *node, gpu_point offset){
             text_draw_result result = {};
 
             if (!in->piece_tree){
-                render_text_section(ctx,(range_t){.start = 0, .size = in->content->cursor},slice, rect, node->info.offset ? *node->info.offset : (gpu_point){}, &result, (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);
+                render_text_section(ctx,(range_t){.start = 0, .size = in->content->cursor},slice, rect, node->info.offset ? *node->info.offset : (gpu_point){}, &result, (text_format){ .font = uno_font, .line_spacing = uno_line_spacing, .character_spacing = uno_character_spacing, .scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy, }, node->info.text_formatting);
 
                 // if (in->gap) //TODO: put the gap buffer here
                 if (in->cursor_color) fb_fill_rect(ctx, rect.point.x + result.cursor.x, rect.point.y + result.cursor.y, 3, fb_line_height(text_size), in->cursor_color);
 
-                render_text_section(ctx,(range_t){.start = in->content->cursor, .size = in->content->buffer_size - in->content->cursor},slice, rect, node->info.offset ? *node->info.offset : (gpu_point){}, &result, (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);
+                render_text_section(ctx,(range_t){.start = in->content->cursor, .size = in->content->buffer_size - in->content->cursor},slice, rect, node->info.offset ? *node->info.offset : (gpu_point){}, &result, (text_format){ .font = uno_font, .line_spacing = uno_line_spacing, .character_spacing = uno_character_spacing,.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy,  }, node->info.text_formatting);
             } else {
-                render_piece_tree(ctx, in, node,  rect, node->info.offset ? *node->info.offset : (gpu_point){}, &result, (text_format){.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);
+                print("Uno font %llx",uno_font);
+                render_piece_tree(ctx, in, node,  rect, node->info.offset ? *node->info.offset : (gpu_point){}, &result, (text_format){ .font = uno_font, .line_spacing = uno_line_spacing, .character_spacing = uno_character_spacing, .scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);
             }
 
         } else draw_text(ctx, rect);

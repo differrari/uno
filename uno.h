@@ -92,6 +92,8 @@ bool uno_dispatch_mouse(mouse_data mouse, u8 modifier);
 void uno_copy(void*);
 void uno_paste(void*);
 
+void uno_default_font(font_hdr *hdr, float line_spacing, float character_spacing);
+
 void uno_redraw_always();
 
 #define VERTICAL(info, children) uno_begin_vertical((info)); children; uno_end_vertical();
