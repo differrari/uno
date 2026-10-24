@@ -312,8 +312,14 @@ void pos_to_lin_col_tree(u32 pos, bt_tree *tree, text_field_info *info, i32 *lin
         uno_text_piece *piece = (uno_text_piece*)traverse.current->data;
         if (count + piece->range.size >= pos){
             string_slice sl = {info->children[piece->buffer_index]->buffer + piece->range.start, pos - count};
-            *lin += count_newlines(sl);
-            *col += pos - count;
+            i32 nl_count = count_newlines(sl);
+            *lin += nl_count;
+            if (nl_count){
+                for (int i = 0; i < nl_count; i++)
+                    sl = slice_seek_to(sl, '\n');
+                *col = sl.length;
+            } else 
+                *col += pos - count;
             return;
         }
         count += piece->range.size;
