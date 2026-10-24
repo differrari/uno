@@ -28,6 +28,7 @@ typedef struct {
     i32 buffer_index;
     range_t range;
     i32 nl_count;
+    i32 tab_count;
 } uno_text_piece;
 
 typedef struct {

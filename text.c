@@ -9,6 +9,8 @@
 
 extern int print(char* fmt,...);
 
+#define SPACES_PER_TAB 4
+
 void uno_text_field_shift_cursor_node(document_node *node, i32 x_shift, i32 y_shift);
 extern document_node* uno_find_node(document_node *node, int tag);
 
@@ -39,11 +41,42 @@ void uno_text_piece_shift_by_until(bt_tree *tree, i64 offset, bt_node *until){
     }
 }
 
-i32 count_newlines(string_slice sl){
+i32 count_chars(string_slice sl, char c){
     i32 count = 0;
     for (int i = 0; i < sl.length; i++)
-        if (sl.data[i] == '\n') count++;
+        if (sl.data[i] == c) count++;
     return count;
+}
+
+void uno_text_remove_from_piece(text_field_info *info, range_t range){
+    bt_node *existing_node = bt_tree_find_node(info->piece_tree, 0, &range, uno_text_find_closest);
+    print("Do we have anything in the %r range? %x",range,existing_node);
+    if (!existing_node) return;
+    uno_text_piece *old_piece = (uno_text_piece*)existing_node->data;
+    range_t old_range = old_piece->range;
+    old_range.start = existing_node->key;
+    //TODO: we could even have multiples
+    if (old_range.start == range.start && old_range.size == range.size){
+        bt_tree_remove(info->piece_tree, existing_node);
+    } else {
+        i64 offset = range.start-existing_node->key;
+        uno_text_piece lh = { .buffer_index = old_piece->buffer_index, .range = {.start = old_piece->range.start, .size = offset } };
+        string_slice lhs = {info->children[old_piece->buffer_index]->buffer + old_piece->range.start, offset};
+        lh.nl_count = count_chars(lhs,'\n');
+        lh.tab_count = count_chars(lhs, '\t');
+        bt_tree_insert(info->piece_tree, &lh, existing_node->key);
+        i64 new_size = old_piece->range.size-offset;
+        new_size -= range.size;
+        if (new_size > 0){
+            uno_text_piece rh = { .buffer_index = old_piece->buffer_index, .range = {.start = old_piece->range.start + offset + range.size, .size = new_size } };
+            string_slice rhs = { info->children[old_piece->buffer_index]->buffer + old_piece->range.start + offset + range.size, new_size };
+            rh.nl_count = count_chars(rhs,'\n');
+            rh.tab_count = count_chars(rhs, '\t');
+            bt_node *new_bound = bt_tree_insert(info->piece_tree, &rh, existing_node->key + offset);
+        } else if (new_size < 0){
+            uno_text_remove_from_piece(info, (range_t){ existing_node->key + offset, -new_size });
+        }
+    }
 }
 
 void uno_text_add_piece(text_field_info *info, uno_text_piece piece, i64 cursor_index){
@@ -61,10 +94,12 @@ void uno_text_add_piece(text_field_info *info, uno_text_piece piece, i64 cursor_
             i64 offset = position-existing_node->key;
             uno_text_piece lh = { .buffer_index = old_piece->buffer_index, .range = {.start = old_piece->range.start, .size = offset } };
             string_slice lhs = {info->children[old_piece->buffer_index]->buffer + old_piece->range.start, offset};
-            lh.nl_count = count_newlines(lhs);
+            lh.nl_count = count_chars(lhs,'\n');
+            lh.tab_count = count_chars(lhs, '\t');
             uno_text_piece rh = { .buffer_index = old_piece->buffer_index, .range = {.start = old_piece->range.start + offset, .size = old_piece->range.size - offset } };
             string_slice rhs = {info->children[old_piece->buffer_index]->buffer + old_piece->range.start + offset, old_piece->range.size - offset};
-            rh.nl_count = count_newlines(rhs);
+            rh.nl_count = count_chars(rhs,'\n');
+            rh.tab_count = count_chars(rhs, '\t');
             //delete the node off the tree, save its key and piece
             bt_tree_insert(info->piece_tree, &lh, existing_node->key);
             bt_node *new_bound = bt_tree_insert(info->piece_tree, &rh, existing_node->key + offset);
@@ -144,28 +179,51 @@ bool uno_text_field_input(document_node *node, kbd_event event, u8 modifier){
     }
     if (event.key == KEY_BACKSPACE){
         if (info->selection.start || info->selection.end){
-            buffer_delete(content, info->selection.end, info->selection.end-info->selection.start);
+            if (info->piece_tree && info->gap){
+                uno_text_remove_from_piece(info, (range_t){info->selection.start,info->selection.end-info->selection.start});
+            } else 
+                buffer_delete(content, info->selection.end, info->selection.end-info->selection.start);
             info->selection.start = 0;
             info->selection.end = 0;
-        } else 
-            buffer_delete(content, content->cursor, 1);
+        } else if (info->cursors[0]){
+            if (info->piece_tree && info->gap){
+                uno_text_remove_from_piece(info, (range_t){info->cursors[0]-1, 1});
+                info->cursors[0] -= 1;
+            } else 
+                buffer_delete(content, content->cursor, 1);
+        }
         uno_refresh();
         return true;
     }
     if (event.key == KEY_DELETE){
         if (info->selection.start || info->selection.end){
-            buffer_delete(content, info->selection.end, info->selection.end-info->selection.start);
+            if (info->piece_tree && info->gap){
+                uno_text_remove_from_piece(info, (range_t){info->selection.start, info->selection.end-info->selection.start});
+            } else
+                buffer_delete(content, info->selection.end, info->selection.end-info->selection.start);
             info->selection.start = 0;
             info->selection.end = 0;
         } else {
-            buffer_delete(content, content->cursor+1, 1);
+            if (info->piece_tree && info->gap){
+                uno_text_remove_from_piece(info, (range_t){info->cursors[0], 1});
+            } else 
+                buffer_delete(content, content->cursor+1, 1);
         }
         uno_refresh();
         return true;
     }
     if (event.key == KEY_TAB){
         char *indent = "\t";
-        buffer_write_to(content, indent, 1, content->cursor);
+        if (info->piece_tree && info->gap){
+            if (buffer_write_lim(info->gap, indent, 1)){
+                uno_text_add_piece(info,(uno_text_piece){
+                    .buffer_index = 1,
+                    .range = {info->gap->cursor-1,1},
+                    .tab_count = 1
+                }, 0);
+            }
+        } else
+            buffer_write_to(content, indent, 1, content->cursor);
         uno_refresh();
         return true;
     }
@@ -312,14 +370,16 @@ void pos_to_lin_col_tree(u32 pos, bt_tree *tree, text_field_info *info, i32 *lin
         uno_text_piece *piece = (uno_text_piece*)traverse.current->data;
         if (count + piece->range.size >= pos){
             string_slice sl = {info->children[piece->buffer_index]->buffer + piece->range.start, pos - count};
-            i32 nl_count = count_newlines(sl);
+            i32 nl_count = count_chars(sl,'\n');
+            i32 tab_count = count_chars(sl, '\t');
             *lin += nl_count;
             if (nl_count){
                 for (int i = 0; i < nl_count; i++)
                     sl = slice_seek_to(sl, '\n');
-                *col = sl.length;
+                tab_count = count_chars(sl, '\t');
+                *col = sl.length + (tab_count*SPACES_PER_TAB);
             } else 
-                *col += pos - count;
+                *col += (pos - count) + (tab_count*SPACES_PER_TAB);
             return;
         }
         count += piece->range.size;
@@ -329,8 +389,9 @@ void pos_to_lin_col_tree(u32 pos, bt_tree *tree, text_field_info *info, i32 *lin
             for (int n = 0; n < piece->nl_count; n++){
                 sl = slice_seek_to(sl, '\n');
             }
-            *col = (i32)sl.length;
-        } else *col += piece->range.size;
+            i32 tab_count = count_chars(sl, '\t');
+            *col = (i32)sl.length + (tab_count * SPACES_PER_TAB);
+        } else *col += piece->range.size + (piece->tab_count*SPACES_PER_TAB);
     }
 }
 
