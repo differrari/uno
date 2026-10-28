@@ -246,8 +246,8 @@ void layout_document(gpu_rect canvas, document_data *doc){
         layout_document(canvas, doc);
 }
 
-void render_text_section(draw_ctx *ctx, range_t string_range, string_slice slice, gpu_rect rect, gpu_point scroll, text_draw_result *result, text_format default_format, text_format_arr text_formatting){
-    fb_continuous_draw_text(ctx, false, &result->cursor, slice, &string_range, rect, &result->size, scroll, default_format, text_formatting);
+void render_text_section(draw_ctx *ctx, text_field_info *info, range_t string_range, string_slice slice, gpu_rect rect, gpu_point scroll, text_draw_result *result, text_format default_format, text_format_arr text_formatting){
+    fb_continuous_draw_text(ctx, false, &result->cursor, info->cursor_count, info->cursors, info->cursor_color, slice, &string_range, rect, &result->size, scroll, default_format, text_formatting);
     if (ctx->fb) mark_dirty(ctx, rect.point.x, rect.point.y, result->size.width, result->size.height);
 }
 
@@ -264,16 +264,10 @@ void render_piece_tree(draw_ctx *ctx, text_field_info *info, document_node *doc_
         uno_text_piece *piece = (uno_text_piece*)node->data;
         if (piece->buffer_index >= 2) continue;
         // print("Rendering %x from buffer %i at %r %i",(uptr)piece,piece->buffer_index,piece->range,info->piece_tree->data_size);
-        fb_continuous_draw_text(ctx, false, &result->cursor, slice_from_buffer(info->children[piece->buffer_index]), &piece->range, rect, &result->size, scroll, default_format, text_formatting);
+        fb_continuous_draw_text(ctx, false, &result->cursor, info->cursor_count, info->cursors, info->cursor_color, slice_from_buffer(info->children[piece->buffer_index]), &piece->range, rect, &result->size, scroll, default_format, text_formatting);
         if (ctx->fb) mark_dirty(ctx, rect.point.x, rect.point.y, result->size.width, result->size.height);
     }
     
-    if (info->cursor_color)
-        for (int i = 0; i < min(info->cursor_count,info->cursor_limit); i++){
-            int lin = 0, col = 0;
-            pos_to_lin_col_tree(info->cursors[i], info->piece_tree, info, &lin, &col);
-            fb_fill_rect(ctx, rect.point.x + col * fb_char_width(default_format.scale), rect.point.y + lin * fb_line_height(default_format.scale), 3, fb_line_height(default_format.scale), info->cursor_color);
-        }
 }
 
 void render_doc_node(draw_ctx *ctx, document_node *node, gpu_point offset){
@@ -314,14 +308,13 @@ void render_doc_node(draw_ctx *ctx, document_node *node, gpu_point offset){
             text_draw_result result = {};
 
             if (!in->piece_tree){
-                render_text_section(ctx,(range_t){.start = 0, .size = in->content->cursor},slice, rect, node->info.offset ? *node->info.offset : (gpu_point){}, &result, (text_format){ .font = uno_font, .line_spacing = uno_line_spacing, .character_spacing = uno_character_spacing, .scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy, }, node->info.text_formatting);
+                render_text_section(ctx,in, (range_t){.start = 0, .size = in->content->cursor},slice, rect, node->info.offset ? *node->info.offset : (gpu_point){}, &result, (text_format){ .font = uno_font, .line_spacing = uno_line_spacing, .character_spacing = uno_character_spacing, .scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy, }, node->info.text_formatting);
 
                 // if (in->gap) //TODO: put the gap buffer here
                 if (in->cursor_color) fb_fill_rect(ctx, rect.point.x + result.cursor.x, rect.point.y + result.cursor.y, 3, fb_line_height(text_size), in->cursor_color);
 
-                render_text_section(ctx,(range_t){.start = in->content->cursor, .size = in->content->buffer_size - in->content->cursor},slice, rect, node->info.offset ? *node->info.offset : (gpu_point){}, &result, (text_format){ .font = uno_font, .line_spacing = uno_line_spacing, .character_spacing = uno_character_spacing,.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy,  }, node->info.text_formatting);
+                render_text_section(ctx,in, (range_t){.start = in->content->cursor, .size = in->content->buffer_size - in->content->cursor},slice, rect, node->info.offset ? *node->info.offset : (gpu_point){}, &result, (text_format){ .font = uno_font, .line_spacing = uno_line_spacing, .character_spacing = uno_character_spacing,.scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy,  }, node->info.text_formatting);
             } else {
-                print("Uno font %llx",uno_font);
                 render_piece_tree(ctx, in, node,  rect, node->info.offset ? *node->info.offset : (gpu_point){}, &result, (text_format){ .font = uno_font, .line_spacing = uno_line_spacing, .character_spacing = uno_character_spacing, .scale = text_size, .foreground = node->info.fg_color, .wrap = node->info.text_wrap_policy }, node->info.text_formatting);
             }
 
