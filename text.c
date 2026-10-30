@@ -30,7 +30,7 @@ tern uno_text_find_closest(void *ctx, bt_tree * tree, bt_node *node){
 
 i32 count_chars(string_slice sl, char c){
     i32 count = 0;
-    for (int i = 0; i < sl.length; i++)
+    for (u32 i = 0; i < sl.length; i++)
         if (sl.data[i] == c) count++;
     return count;
 }
